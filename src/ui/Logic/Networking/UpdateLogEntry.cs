@@ -2,27 +2,24 @@
 
 namespace Nikse.SubtitleEdit.Logic.Networking
 {
-    public class UpdateLogEntry
+    public sealed class UpdateLogEntry
     {
-        public int Id { get; set; }
-        public string UserName { get; set; }
-        public int Index { get; set; }
-        public DateTime OccuredAt { get; set; }
-        public string Action { get; set; }
+        public int Id { get; }
+        public string UserName { get; }
+        public int Index { get; set; } // Mutable for index adjustments
+        public DateTime OccurredAt { get; }
+        public string Action { get; }
 
         public UpdateLogEntry(int id, string userName, int index, string action)
         {
             Id = id;
-            UserName = userName;
+            UserName = userName ?? throw new ArgumentNullException(nameof(userName));
             Index = index;
-            OccuredAt = DateTime.Now;
-            Action = action;
+            OccurredAt = DateTime.Now;
+            Action = action ?? throw new ArgumentNullException(nameof(action));
         }
 
-        public override string ToString()
-        {
-            return $"{OccuredAt.Hour:00}:{OccuredAt.Minute:00}:{OccuredAt.Second:00} {UserName}: {Action}";
-        }
-
+        public override string ToString() => 
+            $"{OccurredAt:HH:mm:ss} {UserName}: {Action}";
     }
 }

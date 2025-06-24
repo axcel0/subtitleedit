@@ -3,7 +3,7 @@ using System.Windows.Forms;
 
 namespace Nikse.SubtitleEdit.Logic.VideoPlayers.MpcHC
 {
-    public partial class MessageHandlerWindow : Form
+    internal sealed partial class MessageHandlerWindow : Form
     {
         public event EventHandler OnCopyData;
 
@@ -15,9 +15,9 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers.MpcHC
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == NativeMethods.WindowsMessageCopyData && OnCopyData != null)
+            if (m.Msg == NativeMethods.WindowsMessageCopyData)
             {
-                OnCopyData.Invoke(m, EventArgs.Empty);
+                OnCopyData?.Invoke(m, EventArgs.Empty);
             }
             base.WndProc(ref m);
         }
@@ -29,5 +29,10 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers.MpcHC
             base.OnLoad(e);
         }
 
+        protected override void SetVisibleCore(bool value)
+        {
+            // Prevent the window from ever becoming visible
+            base.SetVisibleCore(false);
+        }
     }
 }

@@ -1,11 +1,22 @@
-﻿namespace Nikse.SubtitleEdit.Controls
+﻿using System;
+using System.ComponentModel;
+using System.Drawing;
+using System.Windows.Forms;
+
+namespace Nikse.SubtitleEdit.Controls
 {
     sealed partial class AudioVisualizer
     {
+        #region Designer Fields
+
         /// <summary>
         /// Required designer variable.
         /// </summary>
-        private System.ComponentModel.IContainer components = null;
+        private IContainer components = null;
+
+        #endregion
+
+        #region Disposal
 
         /// <summary>
         /// Clean up any resources being used.
@@ -13,12 +24,14 @@
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                components?.Dispose();
             }
             base.Dispose(disposing);
         }
+
+        #endregion
 
         #region Component Designer generated code
 
@@ -28,29 +41,43 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.SuspendLayout();
-            //
-            // Waveform
-            //
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.BackColor = System.Drawing.Color.Black;
-            this.Name = "Waveform";
-            this.Size = new System.Drawing.Size(682, 355);
-            this.Paint += new System.Windows.Forms.PaintEventHandler(this.WaveformPaint);
-            this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.WaveformKeyDown);
-            this.MouseClick += new System.Windows.Forms.MouseEventHandler(this.WaveformMouseClick);
-            this.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.WaveformMouseDoubleClick);
-            this.MouseDown += new System.Windows.Forms.MouseEventHandler(this.WaveformMouseDown);
-            this.MouseEnter += new System.EventHandler(this.WaveformMouseEnter);
-            this.MouseLeave += new System.EventHandler(this.WaveformMouseLeave);
-            this.MouseMove += new System.Windows.Forms.MouseEventHandler(this.WaveformMouseMove);
-            this.MouseUp += new System.Windows.Forms.MouseEventHandler(this.WaveformMouseUp);
-            this.ResumeLayout(false);
+            SuspendLayout();
+            InitializeControlProperties();
+            AttachEventHandlers();
+            ResumeLayout(false);
+        }
 
+        /// <summary>
+        /// Initialize the basic control properties
+        /// </summary>
+        private void InitializeControlProperties()
+        {
+            AutoScaleDimensions = new SizeF(6F, 13F);
+            AutoScaleMode = AutoScaleMode.Font;
+            BackColor = Color.Black;
+            Name = "AudioVisualizer";
+            Size = new Size(682, 355);
+        }
+
+        /// <summary>
+        /// Attach all event handlers for the control
+        /// </summary>
+        private void AttachEventHandlers()
+        {
+            // Core events
+            Paint += WaveformPaint;
+            KeyDown += WaveformKeyDown;
+            
+            // Mouse events
+            MouseClick += WaveformMouseClick;
+            MouseDoubleClick += WaveformMouseDoubleClick;
+            MouseDown += WaveformMouseDown;
+            MouseEnter += WaveformMouseEnter;
+            MouseLeave += WaveformMouseLeave;
+            MouseMove += WaveformMouseMove;
+            MouseUp += WaveformMouseUp;
         }
 
         #endregion
-
     }
 }

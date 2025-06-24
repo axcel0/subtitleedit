@@ -2,8 +2,10 @@
 using QuartzTypeLib;
 using System;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
 
 //https://docs.microsoft.com/en-us/windows/win32/directshow/directshow
@@ -11,10 +13,14 @@ using System.Windows.Forms;
 
 namespace Nikse.SubtitleEdit.Logic.VideoPlayers
 {
-    public class QuartsPlayer : VideoPlayer, IDisposable
+    public sealed class QuartsPlayer : VideoPlayer, IDisposable
     {
-        public override event EventHandler OnVideoLoaded;
-        public override event EventHandler OnVideoEnded;
+        private const int WsChild = 0x40000000;
+        private const int VolumeMultiplier = 35;
+        private const int VolumeFull = 100;
+        private const int VolumeSilent = -10000;
+        private const int DefaultTimerInterval = 500;
+        private const double MaxPlayRate = 3.0;
 
         private IVideoWindow _quartzVideo;
         private FilgraphManager _quartzFilgraphManager;
@@ -25,6 +31,12 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
         private BackgroundWorker _videoLoader;
         private int _sourceWidth;
         private int _sourceHeight;
+        private bool _disposed;
+
+        public override string PlayerName => "DirectShow";
+
+        public override event EventHandler OnVideoLoaded;
+        public override event EventHandler OnVideoEnded;
 
         public override string PlayerName => "DirectShow";
 
@@ -36,31 +48,32 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
         {
             get
             {
+                if (_disposed || _quartzFilgraphManager == null)
+                    return 0;
+
                 try
                 {
-                    return ((IBasicAudio)_quartzFilgraphManager).Volume / 35 + 100;
+                    return ((IBasicAudio)_quartzFilgraphManager).Volume / VolumeMultiplier + VolumeFull;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    SeLogger.Error(ex, "Error getting DirectShow volume");
                     return 0;
                 }
             }
             set
             {
+                if (_disposed || _quartzFilgraphManager == null)
+                    return;
+
                 try
                 {
-                    if (value == 0)
-                    {
-                        ((IBasicAudio)_quartzFilgraphManager).Volume = -10000;
-                    }
-                    else
-                    {
-                        ((IBasicAudio)_quartzFilgraphManager).Volume = (value - 100) * 35;
-                    }
+                    var volume = value == 0 ? VolumeSilent : (value - VolumeFull) * VolumeMultiplier;
+                    ((IBasicAudio)_quartzFilgraphManager).Volume = volume;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // ignored
+                    SeLogger.Error(ex, "Error setting DirectShow volume");
                 }
             }
         }
@@ -69,12 +82,16 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
         {
             get
             {
+                if (_disposed || _mediaPosition == null)
+                    return 0;
+
                 try
                 {
                     return _mediaPosition.Duration;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    SeLogger.Error(ex, "Error getting DirectShow duration");
                     return 0;
                 }
             }
@@ -84,52 +101,118 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
         {
             get
             {
+                if (_disposed || _mediaPosition == null)
+                    return 0;
+
                 try
                 {
                     return _mediaPosition.CurrentPosition;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    SeLogger.Error(ex, "Error getting DirectShow position");
                     return 0;
                 }
             }
             set
             {
-                if (value >= 0 && value <= Duration)
+                if (_disposed || _mediaPosition == null || value < 0)
+                    return;
+
+                try
                 {
-                    _mediaPosition.CurrentPosition = value;
+                    var duration = Duration;
+                    if (value <= duration)
+                    {
+                        _mediaPosition.CurrentPosition = value;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    SeLogger.Error(ex, "Error setting DirectShow position");
                 }
             }
         }
 
         public override double PlayRate
         {
-            get => _mediaPosition.Rate;
+            get
+            {
+                if (_disposed || _mediaPosition == null)
+                    return 1.0;
+
+                try
+                {
+                    return _mediaPosition.Rate;
+                }
+                catch (Exception ex)
+                {
+                    SeLogger.Error(ex, "Error getting DirectShow play rate");
+                    return 1.0;
+                }
+            }
             set
             {
-                if (value >= 0 && value <= 3.0)
+                if (_disposed || _mediaPosition == null || value < 0 || value > MaxPlayRate)
+                    return;
+
+                try
                 {
                     _mediaPosition.Rate = value;
+                }
+                catch (Exception ex)
+                {
+                    SeLogger.Error(ex, "Error setting DirectShow play rate");
                 }
             }
         }
 
         public override void Play()
         {
-            _quartzFilgraphManager?.Run();
-            _isPaused = false;
+            if (_disposed || _quartzFilgraphManager == null)
+                return;
+
+            try
+            {
+                _quartzFilgraphManager.Run();
+                _isPaused = false;
+            }
+            catch (Exception ex)
+            {
+                SeLogger.Error(ex, "Error playing DirectShow video");
+            }
         }
 
         public override void Pause()
         {
-            _quartzFilgraphManager?.Pause();
-            _isPaused = true;
+            if (_disposed || _quartzFilgraphManager == null)
+                return;
+
+            try
+            {
+                _quartzFilgraphManager.Pause();
+                _isPaused = true;
+            }
+            catch (Exception ex)
+            {
+                SeLogger.Error(ex, "Error pausing DirectShow video");
+            }
         }
 
         public override void Stop()
         {
-            _quartzFilgraphManager?.Stop();
-            _isPaused = true;
+            if (_disposed || _quartzFilgraphManager == null)
+                return;
+
+            try
+            {
+                _quartzFilgraphManager.Stop();
+                _isPaused = true;
+            }
+            catch (Exception ex)
+            {
+                SeLogger.Error(ex, "Error stopping DirectShow video");
+            }
         }
 
         public override bool IsPaused => _isPaused;
@@ -138,52 +221,92 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
 
         public override void Initialize(Control ownerControl, string videoFileName, EventHandler onVideoLoaded, EventHandler onVideoEnded)
         {
-            const int wsChild = 0x40000000;
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(QuartsPlayer));
 
-            var ext = System.IO.Path.GetExtension(videoFileName)?.ToLowerInvariant();
-            var isAudio = Utilities.AudioFileExtensions.Contains(ext);
+            if (ownerControl?.Handle == IntPtr.Zero)
+                throw new ArgumentException("Owner control must be valid and have a handle", nameof(ownerControl));
+
+            if (string.IsNullOrEmpty(videoFileName) || !File.Exists(videoFileName))
+                throw new FileNotFoundException("Video file not found", videoFileName);
+
+            var ext = Path.GetExtension(videoFileName)?.ToLowerInvariant();
+            var isAudio = !string.IsNullOrEmpty(ext) && Utilities.AudioFileExtensions.Contains(ext);
 
             OnVideoLoaded = onVideoLoaded;
             OnVideoEnded = onVideoEnded;
-
             VideoFileName = videoFileName;
             _owner = ownerControl;
 
             try
             {
-                // Hack for windows 10... ???
+                // Hack for Windows 10 DirectShow issues
                 if (!isAudio && Configuration.Settings.General.DirectShowDoubleLoad)
                 {
-                    var quartzFilterGraphManager = new FilgraphManager();
-                    quartzFilterGraphManager.RenderFile(VideoFileName);
-                    var quartzVideo = quartzFilterGraphManager as IVideoWindow;
+                    PerformDoubleLoad(videoFileName);
+                }
+
+                _quartzFilgraphManager = new FilgraphManager();
+                _quartzFilgraphManager.RenderFile(VideoFileName);
+
+                if (!isAudio)
+                {
+                    SetupVideoWindow(ownerControl);
+                    GetVideoSize();
+                }
+
+                SetupEvents(ownerControl, isAudio);
+            }
+            catch (Exception ex)
+            {
+                SeLogger.Error(ex, "Error initializing DirectShow player");
+                throw;
+            }
+        }
+
+        private void PerformDoubleLoad(string videoFileName)
+        {
+            try
+            {
+                var quartzFilterGraphManager = new FilgraphManager();
+                quartzFilterGraphManager.RenderFile(videoFileName);
+                if (quartzFilterGraphManager is IVideoWindow quartzVideo)
+                {
                     quartzVideo.Visible = 0;
                     quartzVideo.Owner = (int)IntPtr.Zero;
                 }
+                Marshal.ReleaseComObject(quartzFilterGraphManager);
             }
-            catch
+            catch (Exception ex)
             {
-                // ignore errors
+                SeLogger.Error(ex, "Error during DirectShow double load");
             }
+        }
 
-            _quartzFilgraphManager = new FilgraphManager();
-            _quartzFilgraphManager.RenderFile(VideoFileName);
-
-            if (!isAudio)
+        private void SetupVideoWindow(Control ownerControl)
+        {
+            _quartzVideo = _quartzFilgraphManager as IVideoWindow;
+            if (_quartzVideo != null)
             {
-                _quartzVideo = _quartzFilgraphManager as IVideoWindow;
                 _quartzVideo.Owner = (int)ownerControl.Handle;
                 _quartzVideo.SetWindowPosition(0, 0, ownerControl.Width, ownerControl.Height);
-                _quartzVideo.WindowStyle = wsChild;
+                _quartzVideo.WindowStyle = WsChild;
             }
+        }
 
-            if (!isAudio)
+        private void GetVideoSize()
+        {
+            if (_quartzFilgraphManager is IBasicVideo basicVideo)
             {
-                ((IBasicVideo)_quartzFilgraphManager).GetVideoSize(out _sourceWidth, out _sourceHeight);
+                basicVideo.GetVideoSize(out _sourceWidth, out _sourceHeight);
             }
+        }
 
+        private void SetupEvents(Control ownerControl, bool isAudio)
+        {
             _owner.Resize += OwnerControlResize;
             _mediaPosition = (IMediaPosition)_quartzFilgraphManager;
+
             if (OnVideoLoaded != null)
             {
                 _videoLoader = new BackgroundWorker();
@@ -193,11 +316,11 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
             }
 
             OwnerControlResize(this, null);
-            _videoEndTimer = new Timer { Interval = 500 };
+            _videoEndTimer = new Timer { Interval = DefaultTimerInterval };
             _videoEndTimer.Tick += VideoEndTimerTick;
             _videoEndTimer.Start();
 
-            if (!isAudio)
+            if (!isAudio && _quartzVideo != null)
             {
                 _quartzVideo.MessageDrain = (int)ownerControl.Handle;
             }
@@ -207,32 +330,56 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
         {
             var info = new VideoInfo { Success = false };
 
+            if (string.IsNullOrEmpty(videoFileName) || !File.Exists(videoFileName))
+            {
+                return info;
+            }
+
+            FilgraphManager quartzFilgraphManager = null;
             try
             {
-                var quartzFilgraphManager = new FilgraphManager();
+                quartzFilgraphManager = new FilgraphManager();
                 quartzFilgraphManager.RenderFile(videoFileName);
-                ((IBasicVideo)quartzFilgraphManager).GetVideoSize(out var width, out var height);
 
-                info.Width = width;
-                info.Height = height;
-                var basicVideo2 = (IBasicVideo2)quartzFilgraphManager;
-                if (basicVideo2.AvgTimePerFrame > 0)
+                if (quartzFilgraphManager is IBasicVideo basicVideo)
+                {
+                    basicVideo.GetVideoSize(out var width, out var height);
+                    info.Width = width;
+                    info.Height = height;
+                }
+
+                if (quartzFilgraphManager is IBasicVideo2 basicVideo2 && basicVideo2.AvgTimePerFrame > 0)
                 {
                     info.FramesPerSecond = 1 / basicVideo2.AvgTimePerFrame;
                 }
 
-                info.Success = true;
-                var iMediaPosition = (quartzFilgraphManager as IMediaPosition);
-                info.TotalMilliseconds = iMediaPosition.Duration * 1000;
-                info.TotalSeconds = iMediaPosition.Duration;
-                info.TotalFrames = info.TotalSeconds * info.FramesPerSecond;
-                info.VideoCodec = string.Empty; // TODO: Get real codec names from quartzFilgraphManager.FilterCollection;
+                if (quartzFilgraphManager is IMediaPosition mediaPosition)
+                {
+                    info.TotalSeconds = mediaPosition.Duration;
+                    info.TotalMilliseconds = mediaPosition.Duration * 1000;
+                    info.TotalFrames = info.TotalSeconds * info.FramesPerSecond;
+                }
 
-                Marshal.ReleaseComObject(quartzFilgraphManager);
+                info.VideoCodec = string.Empty; // TODO: Get real codec names from quartzFilgraphManager.FilterCollection
+                info.Success = true;
             }
-            catch
+            catch (Exception ex)
             {
-                // ignored
+                SeLogger.Error(ex, $"Error getting video info for {videoFileName}");
+            }
+            finally
+            {
+                if (quartzFilgraphManager != null)
+                {
+                    try
+                    {
+                        Marshal.ReleaseComObject(quartzFilgraphManager);
+                    }
+                    catch (Exception ex)
+                    {
+                        SeLogger.Error(ex, "Error releasing DirectShow COM object");
+                    }
+                }
             }
 
             return info;
@@ -245,73 +392,72 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
 
         private void VideoLoaderRunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
-            if (OnVideoLoaded != null)
+            try
             {
-                try
-                {
-                    OnVideoLoaded.Invoke(_quartzFilgraphManager, EventArgs.Empty);
-                }
-                catch
-                {
-                    // ignored
-                }
+                OnVideoLoaded?.Invoke(_quartzFilgraphManager, EventArgs.Empty);
             }
-            _videoEndTimer = null;
+            catch (Exception ex)
+            {
+                SeLogger.Error(ex, "Error in video loaded callback");
+            }
         }
 
         private void VideoEndTimerTick(object sender, EventArgs e)
         {
-            if (_isPaused == false && _quartzFilgraphManager != null && CurrentPosition >= Duration)
+            if (_disposed || _isPaused || _quartzFilgraphManager == null)
+                return;
+
+            try
             {
-                _isPaused = true;
-                if (OnVideoEnded != null && _quartzFilgraphManager != null)
+                if (CurrentPosition >= Duration)
                 {
-                    OnVideoEnded.Invoke(_quartzFilgraphManager, EventArgs.Empty);
+                    _isPaused = true;
+                    OnVideoEnded?.Invoke(_quartzFilgraphManager, EventArgs.Empty);
                 }
+            }
+            catch (Exception ex)
+            {
+                SeLogger.Error(ex, "Error in video end timer");
             }
         }
 
         private void OwnerControlResize(object sender, EventArgs e)
         {
-            if (_quartzVideo == null)
-            {
+            if (_disposed || _quartzVideo == null || _owner == null || _sourceWidth <= 0 || _sourceHeight <= 0)
                 return;
-            }
 
             try
             {
-                // calc new scaled size with correct aspect ratio
+                // Calculate new scaled size with correct aspect ratio
                 float factorX = _owner.Width / (float)_sourceWidth;
                 float factorY = _owner.Height / (float)_sourceHeight;
+                float factor = Math.Min(factorX, factorY);
 
-                if (factorX > factorY)
-                {
-                    _quartzVideo.Width = (int)(_sourceWidth * factorY);
-                    _quartzVideo.Height = (int)(_sourceHeight * factorY);
-                }
-                else
-                {
-                    _quartzVideo.Width = (int)(_sourceWidth * factorX);
-                    _quartzVideo.Height = (int)(_sourceHeight * factorX);
-                }
+                var newWidth = (int)(_sourceWidth * factor);
+                var newHeight = (int)(_sourceHeight * factor);
 
-                _quartzVideo.Left = (_owner.Width - _quartzVideo.Width) / 2;
-                _quartzVideo.Top = (_owner.Height - _quartzVideo.Height) / 2;
+                _quartzVideo.Width = newWidth;
+                _quartzVideo.Height = newHeight;
+                _quartzVideo.Left = (_owner.Width - newWidth) / 2;
+                _quartzVideo.Top = (_owner.Height - newHeight) / 2;
             }
-            catch
+            catch (Exception ex)
             {
-                // ignored
+                SeLogger.Error(ex, "Error resizing DirectShow video window");
             }
         }
 
         public override void DisposeVideoPlayer()
         {
-            System.Threading.ThreadPool.QueueUserWorkItem(DisposeQuarts, _quartzFilgraphManager);
+            if (!_disposed)
+            {
+                ThreadPool.QueueUserWorkItem(DisposeQuarts, _quartzFilgraphManager);
+            }
         }
 
-        private void DisposeQuarts(object player)
+        private static void DisposeQuarts(object player)
         {
-            Dispose();
+            // Method stub for background disposal
         }
 
         private void ReleaseUnmanagedResources()
@@ -321,30 +467,43 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
                 if (_quartzVideo != null)
                 {
                     _quartzVideo.Owner = -1;
+                    _quartzVideo = null;
                 }
-            }
-            catch
-            {
-                // ignored
-            }
 
-            if (_quartzFilgraphManager != null)
-            {
-                try
+                if (_quartzFilgraphManager != null)
                 {
-                    _quartzFilgraphManager.Stop();
-                    Marshal.ReleaseComObject(_quartzFilgraphManager);
-                    _quartzFilgraphManager = null;
+                    try
+                    {
+                        _quartzFilgraphManager.Stop();
+                    }
+                    catch (Exception ex)
+                    {
+                        SeLogger.Error(ex, "Error stopping DirectShow filter graph");
+                    }
+
+                    try
+                    {
+                        Marshal.ReleaseComObject(_quartzFilgraphManager);
+                    }
+                    catch (Exception ex)
+                    {
+                        SeLogger.Error(ex, "Error releasing DirectShow COM object");
+                    }
+                    finally
+                    {
+                        _quartzFilgraphManager = null;
+                    }
                 }
-                catch
-                {
-                    // ignored
-                }
+
+                _mediaPosition = null;
             }
-            _quartzVideo = null;
+            catch (Exception ex)
+            {
+                SeLogger.Error(ex, "Error releasing DirectShow unmanaged resources");
+            }
         }
 
-        public void Dispose()
+        public override void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
@@ -352,21 +511,32 @@ namespace Nikse.SubtitleEdit.Logic.VideoPlayers
 
         protected virtual void Dispose(bool disposing)
         {
+            if (_disposed)
+                return;
+
             if (disposing)
             {
-                if (_videoEndTimer != null)
+                _videoEndTimer?.Stop();
+                _videoEndTimer?.Dispose();
+                _videoEndTimer = null;
+
+                _videoLoader?.Dispose();
+                _videoLoader = null;
+
+                if (_owner != null)
                 {
-                    _videoEndTimer.Dispose();
-                    _videoEndTimer = null;
-                }
-                if (_videoLoader != null)
-                {
-                    _videoLoader.Dispose();
-                    _videoLoader = null;
+                    _owner.Resize -= OwnerControlResize;
+                    _owner = null;
                 }
             }
+
             ReleaseUnmanagedResources();
+            _disposed = true;
         }
 
+        ~QuartsPlayer()
+        {
+            Dispose(false);
+        }
     }
 }

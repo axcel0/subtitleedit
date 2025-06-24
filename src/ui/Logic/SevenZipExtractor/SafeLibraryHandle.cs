@@ -15,7 +15,15 @@ namespace SevenZipExtractor
         [ReliabilityContract(Consistency.WillNotCorruptState, Cer.Success)]
         protected override bool ReleaseHandle()
         {
-            return Kernel32Dll.FreeLibrary(this.handle);
+            try
+            {
+                return Kernel32Dll.FreeLibrary(handle);
+            }
+            catch
+            {
+                // Ensure we don't throw from finalizer
+                return false;
+            }
         }
     }
 }

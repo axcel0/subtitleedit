@@ -3,29 +3,32 @@ using System.IO;
 
 namespace SevenZipExtractor
 {
-    public class Entry
+    public sealed class Entry
     {
-        private readonly IInArchive archive;
-        private readonly uint index;
+        private readonly IInArchive _archive;
+        private readonly uint _index;
 
         internal Entry(IInArchive archive, uint index)
         {
-            this.archive = archive;
-            this.index = index;
+            _archive = archive ?? throw new ArgumentNullException(nameof(archive));
+            _index = index;
         }
 
         /// <summary>
         /// Name of the file with its relative path within the archive
         /// </summary>
         public string FileName { get; internal set; }
+
         /// <summary>
         /// True if entry is a folder, false if it is a file
         /// </summary>
         public bool IsFolder { get; internal set; }
+
         /// <summary>
         /// Original entry size
         /// </summary>
         public ulong Size { get; internal set; }
+
         /// <summary>
         /// Entry size in a archived state
         /// </summary>
@@ -45,16 +48,16 @@ namespace SevenZipExtractor
         /// Date and time of the last access of the file (entry)
         /// </summary>
         public DateTime LastAccessTime { get; internal set; }
-        
+
         /// <summary>
         /// CRC hash of the entry
         /// </summary>
-        public UInt32 CRC { get; internal set; }
+        public uint CRC { get; internal set; }
 
         /// <summary>
         /// Attributes of the entry
         /// </summary>
-        public UInt32 Attributes { get; internal set; }
+        public uint Attributes { get; internal set; }
 
         /// <summary>
         /// True if entry is encrypted, otherwise false
@@ -88,32 +91,45 @@ namespace SevenZipExtractor
 
         public void Extract(string fileName, bool preserveTimestamp = true)
         {
-            if (this.IsFolder)
+            if (string.IsNullOrWhiteSpace(fileName))
+                throw new ArgumentException("File name cannot be null or empty", nameof(fileName));
+
+            if (IsFolder)
             {
                 Directory.CreateDirectory(fileName);
                 return;
             }
 
-            string directoryName = Path.GetDirectoryName(fileName);
-
+            var directoryName = Path.GetDirectoryName(fileName);
             if (!string.IsNullOrWhiteSpace(directoryName))
             {
                 Directory.CreateDirectory(directoryName);
             }
 
-            using (FileStream fileStream = File.Create(fileName))
+            using (var fileStream = File.Create(fileName))
             {
-                this.Extract(fileStream);
+                Extract(fileStream);
             }
 
-            if (preserveTimestamp)
+            if (preserveTimestamp && LastWriteTime != default)
             {
-                File.SetLastWriteTime(fileName, this.LastWriteTime);
+                try
+                {
+                    File.SetLastWriteTime(fileName, LastWriteTime);
+                }
+                catch
+                {
+                    // Ignore timestamp setting errors
+                }
             }
         }
+
         public void Extract(Stream stream, string password = null)
         {
-            this.archive.Extract(new[] { this.index }, 1, 0, new ArchiveStreamCallback(this.index, stream, password));
+            if (stream == null)
+                throw new ArgumentNullException(nameof(stream));
+
+            _archive.Extract(new[] { _index }, 1, 0, new ArchiveStreamCallback(_index, stream, password));
         }
     }
 }

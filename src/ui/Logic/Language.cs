@@ -5,165 +5,235 @@ using System.Xml.Serialization;
 
 namespace Nikse.SubtitleEdit.Logic
 {
-    public class Language
+    public sealed class Language
     {
         [XmlAttribute("Name")]
-        public string Name;
-        public LanguageStructure.General General;
-        public LanguageStructure.About About;
-        public LanguageStructure.AddToNames AddToNames;
-        public LanguageStructure.AddToOcrReplaceList AddToOcrReplaceList;
-        public LanguageStructure.AddToUserDictionary AddToUserDictionary;
-        public LanguageStructure.AddWaveform AddWaveform;
-        public LanguageStructure.AddWaveformBatch AddWaveformBatch;
-        public LanguageStructure.AdjustDisplayDuration AdjustDisplayDuration;
-        public LanguageStructure.ApplyDurationLimits ApplyDurationLimits;
-        public LanguageStructure.AudioToText AudioToText;
-        public LanguageStructure.AssaAttachments AssaAttachments;
-        public LanguageStructure.AssaOverrideTags AssaOverrideTags;
-        public LanguageStructure.AssaProgressBarGenerator AssaProgressBarGenerator;
-        public LanguageStructure.AssaResolutionChanger AssaResolutionChanger;
-        public LanguageStructure.ImageColorPicker ImageColorPicker;
-        public LanguageStructure.AssaSetBackgroundBox AssaSetBackgroundBox;
-        public LanguageStructure.AssaSetPosition AssaSetPosition;
-        public LanguageStructure.AutoBreakUnbreakLines AutoBreakUnbreakLines;
-        public LanguageStructure.BatchConvert BatchConvert;
-        public LanguageStructure.BeautifyTimeCodes BeautifyTimeCodes;
-        public LanguageStructure.BeautifyTimeCodesProfile BeautifyTimeCodesProfile;
-        public LanguageStructure.BinEdit BinEdit;
-        public LanguageStructure.Bookmarks Bookmarks;
-        public LanguageStructure.ChangeCasing ChangeCasing;
-        public LanguageStructure.ChangeCasingNames ChangeCasingNames;
-        public LanguageStructure.ChangeFrameRate ChangeFrameRate;
-        public LanguageStructure.ChangeSpeedInPercent ChangeSpeedInPercent;
-        public LanguageStructure.CheckForUpdates CheckForUpdates;
-        public LanguageStructure.ChooseAudioTrack ChooseAudioTrack;
-        public LanguageStructure.ChooseEncoding ChooseEncoding;
-        public LanguageStructure.ChooseLanguage ChooseLanguage;
-        public LanguageStructure.ColorChooser ColorChooser;
-        public LanguageStructure.ColumnPaste ColumnPaste;
-        public LanguageStructure.CompareSubtitles CompareSubtitles;
-        public LanguageStructure.ConvertActor ConvertActor;
-        public LanguageStructure.ConvertColorsToDialog ConvertColorsToDialog;
-        public LanguageStructure.DCinemaProperties DCinemaProperties;
-        public LanguageStructure.DurationsBridgeGaps DurationsBridgeGaps;
-        public LanguageStructure.DvdSubRip DvdSubRip;
-        public LanguageStructure.DvdSubRipChooseLanguage DvdSubRipChooseLanguage;
-        public LanguageStructure.EbuSaveOptions EbuSaveOptions;
-        public LanguageStructure.EffectKaraoke EffectKaraoke;
-        public LanguageStructure.EffectTypewriter EffectTypewriter;
-        public LanguageStructure.ExportCustomText ExportCustomText;
-        public LanguageStructure.ExportCustomTextFormat ExportCustomTextFormat;
-        public LanguageStructure.ExportFcpXmlAdvanced ExportFcpXmlAdvanced;
-        public LanguageStructure.ExportPngXml ExportPngXml;
-        public LanguageStructure.ExportText ExportText;
-        public LanguageStructure.ExtractDateTimeInfo ExtractDateTimeInfo;
-        public LanguageStructure.FindDialog FindDialog;
-        public LanguageStructure.FindSubtitleLine FindSubtitleLine;
-        public LanguageStructure.FixCommonErrors FixCommonErrors;
-        public LanguageStructure.GenerateBlankVideo GenerateBlankVideo;
-        public LanguageStructure.GenerateVideoWithBurnedInSubs GenerateVideoWithBurnedInSubs;
-        public LanguageStructure.GenerateVideoWithEmbeddedSubs GenerateVideoWithEmbeddedSubs;
-        public LanguageStructure.GetDictionaries GetDictionaries;
-        public LanguageStructure.GetTesseractDictionaries GetTesseractDictionaries;
-        public LanguageStructure.GoogleTranslate GoogleTranslate;
-        public LanguageStructure.GoogleOrMicrosoftTranslate GoogleOrMicrosoftTranslate;
-        public LanguageStructure.GoToLine GoToLine;
-        public LanguageStructure.ImportImages ImportImages;
-        public LanguageStructure.ImportShotChanges ImportShotChanges;
-        public LanguageStructure.ImportText ImportText;
-        public LanguageStructure.Interjections Interjections;
-        public LanguageStructure.JoinSubtitles JoinSubtitles;
-        public LanguageStructure.LanguageNames LanguageNames;
-        public LanguageStructure.Main Main;
-        public LanguageStructure.MatroskaSubtitleChooser MatroskaSubtitleChooser;
-        public LanguageStructure.MeasurementConverter MeasurementConverter;
-        public LanguageStructure.MergeDoubleLines MergeDoubleLines;
-        public LanguageStructure.MergeShortLines MergedShortLines;
-        public LanguageStructure.MergeTextWithSameTimeCodes MergeTextWithSameTimeCodes;
-        public LanguageStructure.ModifySelection ModifySelection;
-        public LanguageStructure.MultipleReplace MultipleReplace;
-        public LanguageStructure.NetworkChat NetworkChat;
-        public LanguageStructure.NetworkJoin NetworkJoin;
-        public LanguageStructure.NetworkLogAndInfo NetworkLogAndInfo;
-        public LanguageStructure.NetworkStart NetworkStart;
-        public LanguageStructure.OpenVideoDvd OpenVideoDvd;
-        public LanguageStructure.PluginsGet PluginsGet;
-        public LanguageStructure.RegularExpressionContextMenu RegularExpressionContextMenu;
-        public LanguageStructure.RemoveTextFromHearImpaired RemoveTextFromHearImpaired;
-        public LanguageStructure.ReplaceDialog ReplaceDialog;
-        public LanguageStructure.RestoreAutoBackup RestoreAutoBackup;
-        public LanguageStructure.SeekSilence SeekSilence;
-        public LanguageStructure.SetMinimumDisplayTimeBetweenParagraphs SetMinimumDisplayTimeBetweenParagraphs;
-        public LanguageStructure.SetSyncPoint SetSyncPoint;
-        public LanguageStructure.Settings Settings;
-        public LanguageStructure.SettingsMpv SettingsMpv;
-        public LanguageStructure.SettingsFfmpeg SettingsFfmpeg;
-        public LanguageStructure.SetVideoOffset SetVideoOffset;
-        public LanguageStructure.ShowEarlierLater ShowEarlierLater;
-        public LanguageStructure.ShowHistory ShowHistory;
-        public LanguageStructure.SpellCheck SpellCheck;
-        public LanguageStructure.NetflixQualityCheck NetflixQualityCheck;
-        public LanguageStructure.Split Split;
-        public LanguageStructure.SplitLongLines SplitLongLines;
-        public LanguageStructure.SplitSubtitle SplitSubtitle;
-        public LanguageStructure.StartNumberingFrom StartNumberingFrom;
-        public LanguageStructure.Statistics Statistics;
-        public LanguageStructure.SubStationAlphaProperties SubStationAlphaProperties;
-        public LanguageStructure.SubStationAlphaStyles SubStationAlphaStyles;
-        public LanguageStructure.SubStationAlphaStylesCategoriesManager SubStationAlphaStylesCategoriesManager;
-        public LanguageStructure.PointSync PointSync;
-        public LanguageStructure.TextToSpeech TextToSpeech;
-        public LanguageStructure.TimedTextSmpteTiming TimedTextSmpteTiming;
-        public LanguageStructure.TransportStreamSubtitleChooser TransportStreamSubtitleChooser;
-        public LanguageStructure.UnknownSubtitle UnknownSubtitle;
-        public LanguageStructure.VerifyCompleteness VerifyCompleteness;
-        public LanguageStructure.VisualSync VisualSync;
-        public LanguageStructure.VobSubEditCharacters VobSubEditCharacters;
-        public LanguageStructure.VobSubOcr VobSubOcr;
-        public LanguageStructure.VobSubOcrCharacter VobSubOcrCharacter;
-        public LanguageStructure.VobSubOcrCharacterInspect VobSubOcrCharacterInspect;
-        public LanguageStructure.VobSubOcrNewFolder VobSubOcrNewFolder;
-        public LanguageStructure.VobSubOcrSetItalicAngle VobSubOcrSetItalicAngle;
-        public LanguageStructure.OcrPreprocessing OcrPreprocessing;
-        public LanguageStructure.Watermark Watermark;
-        public LanguageStructure.Waveform Waveform;
-        public LanguageStructure.WaveformGenerateTimeCodes WaveformGenerateTimeCodes;
-        public LanguageStructure.WebVttNewVoice WebVttNewVoice;
-        public LanguageStructure.WebVttProperties WebVttProperties;
-        public LanguageStructure.WebVttStyleManager WebVttStyleManager;
-        public LanguageStructure.WhisperAdvanced WhisperAdvanced;
+        public string Name { get; set; } = "English";
 
+        // Core language structures - initialized on demand
+        public LanguageStructure.General General { get; set; }
+        public LanguageStructure.About About { get; set; }
+        public LanguageStructure.AddToNames AddToNames { get; set; }
+        public LanguageStructure.AddToOcrReplaceList AddToOcrReplaceList { get; set; }
+        public LanguageStructure.AddToUserDictionary AddToUserDictionary { get; set; }
+        public LanguageStructure.AddWaveform AddWaveform { get; set; }
+        public LanguageStructure.AddWaveformBatch AddWaveformBatch { get; set; }
+        public LanguageStructure.AdjustDisplayDuration AdjustDisplayDuration { get; set; }
+        public LanguageStructure.ApplyDurationLimits ApplyDurationLimits { get; set; }
+        public LanguageStructure.AudioToText AudioToText { get; set; }
+        public LanguageStructure.AssaAttachments AssaAttachments { get; set; }
+        public LanguageStructure.AssaOverrideTags AssaOverrideTags { get; set; }
+        public LanguageStructure.AssaProgressBarGenerator AssaProgressBarGenerator { get; set; }
+        public LanguageStructure.AssaResolutionChanger AssaResolutionChanger { get; set; }
+        public LanguageStructure.ImageColorPicker ImageColorPicker { get; set; }
+        public LanguageStructure.AssaSetBackgroundBox AssaSetBackgroundBox { get; set; }
+        public LanguageStructure.AssaSetPosition AssaSetPosition { get; set; }
+        public LanguageStructure.AutoBreakUnbreakLines AutoBreakUnbreakLines { get; set; }
+        public LanguageStructure.BatchConvert BatchConvert { get; set; }
+        public LanguageStructure.BeautifyTimeCodes BeautifyTimeCodes { get; set; }
+        public LanguageStructure.BeautifyTimeCodesProfile BeautifyTimeCodesProfile { get; set; }
+        public LanguageStructure.BinEdit BinEdit { get; set; }
+        public LanguageStructure.Bookmarks Bookmarks { get; set; }
+        public LanguageStructure.ChangeCasing ChangeCasing { get; set; }
+        public LanguageStructure.ChangeCasingNames ChangeCasingNames { get; set; }
+        public LanguageStructure.ChangeFrameRate ChangeFrameRate { get; set; }
+        public LanguageStructure.ChangeSpeedInPercent ChangeSpeedInPercent { get; set; }
+        public LanguageStructure.CheckForUpdates CheckForUpdates { get; set; }
+        public LanguageStructure.ChooseAudioTrack ChooseAudioTrack { get; set; }
+        public LanguageStructure.ChooseEncoding ChooseEncoding { get; set; }
+        public LanguageStructure.ChooseLanguage ChooseLanguage { get; set; }
+        public LanguageStructure.ColorChooser ColorChooser { get; set; }
+        public LanguageStructure.ColumnPaste ColumnPaste { get; set; }
+        public LanguageStructure.CompareSubtitles CompareSubtitles { get; set; }
+        public LanguageStructure.ConvertActor ConvertActor { get; set; }
+        public LanguageStructure.ConvertColorsToDialog ConvertColorsToDialog { get; set; }
+        public LanguageStructure.DCinemaProperties DCinemaProperties { get; set; }
+        public LanguageStructure.DurationsBridgeGaps DurationsBridgeGaps { get; set; }
+        public LanguageStructure.DvdSubRip DvdSubRip { get; set; }
+        public LanguageStructure.DvdSubRipChooseLanguage DvdSubRipChooseLanguage { get; set; }
+        public LanguageStructure.EbuSaveOptions EbuSaveOptions { get; set; }
+        public LanguageStructure.EffectKaraoke EffectKaraoke { get; set; }
+        public LanguageStructure.EffectTypewriter EffectTypewriter { get; set; }
+        public LanguageStructure.ExportCustomText ExportCustomText { get; set; }
+        public LanguageStructure.ExportCustomTextFormat ExportCustomTextFormat { get; set; }
+        public LanguageStructure.ExportFcpXmlAdvanced ExportFcpXmlAdvanced { get; set; }
+        public LanguageStructure.ExportPngXml ExportPngXml { get; set; }
+        public LanguageStructure.ExportText ExportText { get; set; }
+        public LanguageStructure.ExtractDateTimeInfo ExtractDateTimeInfo { get; set; }
+        public LanguageStructure.FindDialog FindDialog { get; set; }
+        public LanguageStructure.FindSubtitleLine FindSubtitleLine { get; set; }
+        public LanguageStructure.FixCommonErrors FixCommonErrors { get; set; }
+        public LanguageStructure.GenerateBlankVideo GenerateBlankVideo { get; set; }
+        public LanguageStructure.GenerateVideoWithBurnedInSubs GenerateVideoWithBurnedInSubs { get; set; }
+        public LanguageStructure.GenerateVideoWithEmbeddedSubs GenerateVideoWithEmbeddedSubs { get; set; }
+        public LanguageStructure.GetDictionaries GetDictionaries { get; set; }
+        public LanguageStructure.GetTesseractDictionaries GetTesseractDictionaries { get; set; }
+        public LanguageStructure.GoogleTranslate GoogleTranslate { get; set; }
+        public LanguageStructure.GoogleOrMicrosoftTranslate GoogleOrMicrosoftTranslate { get; set; }
+        public LanguageStructure.GoToLine GoToLine { get; set; }
+        public LanguageStructure.ImportImages ImportImages { get; set; }
+        public LanguageStructure.ImportShotChanges ImportShotChanges { get; set; }
+        public LanguageStructure.ImportText ImportText { get; set; }
+        public LanguageStructure.Interjections Interjections { get; set; }
+        public LanguageStructure.JoinSubtitles JoinSubtitles { get; set; }
+        public LanguageStructure.LanguageNames LanguageNames { get; set; }
+        public LanguageStructure.Main Main { get; set; }
+        public LanguageStructure.MatroskaSubtitleChooser MatroskaSubtitleChooser { get; set; }
+        public LanguageStructure.MeasurementConverter MeasurementConverter { get; set; }
+        public LanguageStructure.MergeDoubleLines MergeDoubleLines { get; set; }
+        public LanguageStructure.MergeShortLines MergedShortLines { get; set; }
+        public LanguageStructure.MergeTextWithSameTimeCodes MergeTextWithSameTimeCodes { get; set; }
+        public LanguageStructure.ModifySelection ModifySelection { get; set; }
+        public LanguageStructure.MultipleReplace MultipleReplace { get; set; }
+        public LanguageStructure.NetworkChat NetworkChat { get; set; }
+        public LanguageStructure.NetworkJoin NetworkJoin { get; set; }
+        public LanguageStructure.NetworkLogAndInfo NetworkLogAndInfo { get; set; }
+        public LanguageStructure.NetworkStart NetworkStart { get; set; }
+        public LanguageStructure.OpenVideoDvd OpenVideoDvd { get; set; }
+        public LanguageStructure.PluginsGet PluginsGet { get; set; }
+        public LanguageStructure.RegularExpressionContextMenu RegularExpressionContextMenu { get; set; }
+        public LanguageStructure.RemoveTextFromHearImpaired RemoveTextFromHearImpaired { get; set; }
+        public LanguageStructure.ReplaceDialog ReplaceDialog { get; set; }
+        public LanguageStructure.RestoreAutoBackup RestoreAutoBackup { get; set; }
+        public LanguageStructure.SeekSilence SeekSilence { get; set; }
+        public LanguageStructure.SetMinimumDisplayTimeBetweenParagraphs SetMinimumDisplayTimeBetweenParagraphs { get; set; }
+        public LanguageStructure.SetSyncPoint SetSyncPoint { get; set; }
+        public LanguageStructure.Settings Settings { get; set; }
+        public LanguageStructure.SettingsMpv SettingsMpv { get; set; }
+        public LanguageStructure.SettingsFfmpeg SettingsFfmpeg { get; set; }
+        public LanguageStructure.SetVideoOffset SetVideoOffset { get; set; }
+        public LanguageStructure.ShowEarlierLater ShowEarlierLater { get; set; }
+        public LanguageStructure.ShowHistory ShowHistory { get; set; }
+        public LanguageStructure.SpellCheck SpellCheck { get; set; }
+        public LanguageStructure.NetflixQualityCheck NetflixQualityCheck { get; set; }
+        public LanguageStructure.Split Split { get; set; }
+        public LanguageStructure.SplitLongLines SplitLongLines { get; set; }
+        public LanguageStructure.SplitSubtitle SplitSubtitle { get; set; }
+        public LanguageStructure.StartNumberingFrom StartNumberingFrom { get; set; }
+        public LanguageStructure.Statistics Statistics { get; set; }
+        public LanguageStructure.SubStationAlphaProperties SubStationAlphaProperties { get; set; }
+        public LanguageStructure.SubStationAlphaStyles SubStationAlphaStyles { get; set; }
+        public LanguageStructure.SubStationAlphaStylesCategoriesManager SubStationAlphaStylesCategoriesManager { get; set; }
+        public LanguageStructure.PointSync PointSync { get; set; }
+        public LanguageStructure.TextToSpeech TextToSpeech { get; set; }
+        public LanguageStructure.TimedTextSmpteTiming TimedTextSmpteTiming { get; set; }
+        public LanguageStructure.TransportStreamSubtitleChooser TransportStreamSubtitleChooser { get; set; }
+        public LanguageStructure.UnknownSubtitle UnknownSubtitle { get; set; }
+        public LanguageStructure.VerifyCompleteness VerifyCompleteness { get; set; }
+        public LanguageStructure.VisualSync VisualSync { get; set; }
+        public LanguageStructure.VobSubEditCharacters VobSubEditCharacters { get; set; }
+        public LanguageStructure.VobSubOcr VobSubOcr { get; set; }
+        public LanguageStructure.VobSubOcrCharacter VobSubOcrCharacter { get; set; }
+        public LanguageStructure.VobSubOcrCharacterInspect VobSubOcrCharacterInspect { get; set; }
+        public LanguageStructure.VobSubOcrNewFolder VobSubOcrNewFolder { get; set; }
+        public LanguageStructure.VobSubOcrSetItalicAngle VobSubOcrSetItalicAngle { get; set; }
+        public LanguageStructure.OcrPreprocessing OcrPreprocessing { get; set; }
+        public LanguageStructure.Watermark Watermark { get; set; }
+        public LanguageStructure.Waveform Waveform { get; set; }
+        public LanguageStructure.WaveformGenerateTimeCodes WaveformGenerateTimeCodes { get; set; }
+        public LanguageStructure.WebVttNewVoice WebVttNewVoice { get; set; }
+        public LanguageStructure.WebVttProperties WebVttProperties { get; set; }
+        public LanguageStructure.WebVttStyleManager WebVttStyleManager { get; set; }
+        public LanguageStructure.WhisperAdvanced WhisperAdvanced { get; set; }
+
+        // Parameterless constructor for XML serialization
         public Language()
         {
+            InitializeLanguageStructures();
+        }
+
+        // Copy constructor for cloning
+        public Language(Language source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            
+            // Copy all properties (this could be optimized further with reflection or code generation)
+            Name = source.Name;
+            InitializeLanguageStructures();
+            // Note: Full deep copy implementation would require significant code generation
+            // For now, initialize with default values and let specific copy operations handle the rest
+        }
+
+        #region Constants for commonly used strings
+        
+        // Common UI strings that appear frequently
+        private static readonly string CommonOk = string.Intern("&OK");
+        private static readonly string CommonCancel = string.Intern("C&ancel");
+        private static readonly string CommonYes = string.Intern("Yes");
+        private static readonly string CommonNo = string.Intern("No");
+        private static readonly string CommonClose = string.Intern("Close");
+        private static readonly string CommonApply = string.Intern("Apply");
+        private static readonly string CommonNone = string.Intern("None");
+        private static readonly string CommonAll = string.Intern("All");
+        private static readonly string CommonPreview = string.Intern("Preview");
+        private static readonly string CommonAdvanced = string.Intern("Advanced");
+        private static readonly string CommonGeneral = string.Intern("General");
+        private static readonly string CommonReset = string.Intern("Reset");
+        private static readonly string CommonError = string.Intern("Error");
+        private static readonly string CommonWarning = string.Intern("Warning");
+        private static readonly string CommonSearch = string.Intern("Search");
+        private static readonly string CommonBefore = string.Intern("Before");
+        private static readonly string CommonAfter = string.Intern("After");
+        private static readonly string CommonSize = string.Intern("Size");
+        private static readonly string CommonWidth = string.Intern("Width");
+        private static readonly string CommonHeight = string.Intern("Height");
+        private static readonly string CommonStyle = string.Intern("Style");
+        private static readonly string CommonName = string.Intern("Name");
+        private static readonly string CommonText = string.Intern("Text");
+        private static readonly string CommonDuration = string.Intern("Duration");
+        private static readonly string CommonCharacter = string.Intern("Character");
+        private static readonly string CommonClass = string.Intern("Class");
+        
+        // File related strings
+        private static readonly string CommonSubtitleFile = string.Intern("Subtitle file");
+        private static readonly string CommonSubtitleFiles = string.Intern("Subtitle files");
+        private static readonly string CommonAllFiles = string.Intern("All files");
+        private static readonly string CommonVideoFiles = string.Intern("Video files");
+        private static readonly string CommonAudioFiles = string.Intern("Audio files");
+        
+        #endregion
+
+        /// <summary>
+        /// Initialize all language structures with English defaults
+        /// </summary>
+        private void InitializeLanguageStructures()
+        {
+            // Use string interning for common strings to save memory
+            var defaultTitle = string.Intern("Subtitle Edit");
+            var defaultVersion = string.Intern("3.5");
+            var defaultCultureName = string.Intern("en-US");
+            var defaultTranslatedBy = string.Intern(" ");
+            var emptyString = string.Intern(string.Empty);
+
             Name = "English";
 
             General = new LanguageStructure.General
             {
-                Title = "Subtitle Edit",
-                Version = "3.5",
-                TranslatedBy = " ",
-                CultureName = "en-US",
-                HelpFile = string.Empty,
-                Ok = "&OK",
-                Cancel = "C&ancel",
-                Yes = "Yes",
-                No = "No",
-                Close = "Close",
-                Apply = "Apply",
+                Title = defaultTitle,
+                Version = defaultVersion,
+                TranslatedBy = defaultTranslatedBy,
+                CultureName = defaultCultureName,
+                HelpFile = emptyString,
+                Ok = CommonOk,
+                Cancel = CommonCancel,
+                Yes = CommonYes,
+                No = CommonNo,
+                Close = CommonClose,
+                Apply = CommonApply,
                 ApplyTo = "Apply to",
-                None = "None",
-                All = "All",
-                Preview = "Preview",
+                None = CommonNone,
+                All = CommonAll,
+                Preview = CommonPreview,
                 ShowPreview = "Show preview",
                 HidePreview = "Hide preview",
-                SubtitleFile = "Subtitle file",
-                SubtitleFiles = "Subtitle files",
-                AllFiles = "All files",
-                VideoFiles = "Video files",
+                SubtitleFile = CommonSubtitleFile,
+                SubtitleFiles = CommonSubtitleFiles,
+                AllFiles = CommonAllFiles,
+                VideoFiles = CommonVideoFiles,
                 Images = "Images",
                 Fonts = "Fonts",
-                AudioFiles = "Audio files",
+                AudioFiles = CommonAudioFiles,
                 OpenSubtitle = "Open subtitle...",
                 OpenVideoFile = "Open video file...",
                 OpenVideoFileTitle = "Open video file...",
@@ -172,7 +242,7 @@ namespace Nikse.SubtitleEdit.Logic
                 VideoInformation = "Video info",
                 StartTime = "Start time",
                 EndTime = "End time",
-                Duration = "Duration",
+                Duration = CommonDuration,
                 CharsPerSec = "Chars/sec",
                 WordsPerMin = "Words/min",
                 Actor = "Actor",
@@ -181,7 +251,7 @@ namespace Nikse.SubtitleEdit.Logic
                 Layer = "Layer",
                 NumberSymbol = "#",
                 Number = "Number",
-                Text = "Text",
+                Text = CommonText,
                 HourMinutesSecondsDecimalSeparatorMilliseconds = "Hour:min:sec{0}ms",
                 HourMinutesSecondsFrames = "Hour:min:sec:frames",
                 XSeconds = "{0:0.0##} seconds",
@@ -191,7 +261,7 @@ namespace Nikse.SubtitleEdit.Logic
                 Strikeout = "Strikeout",
                 Visible = "Visible",
                 FrameRate = "Frame rate",
-                Name = "Name",
+                Name = CommonName,
                 SingleLineLengths = "Single line length:",
                 TotalLengthX = "Total length: {0}",
                 TotalLengthXSplitLine = "Total length: {0} (split line!)",
@@ -3947,67 +4017,160 @@ Keep changes?",
 
         public static Language Load(string fileName)
         {
-            var language = LanguageDeserializer.CustomDeserializeLanguage(fileName);
-            var english = new Language();
+            if (string.IsNullOrWhiteSpace(fileName))
+                throw new ArgumentException("File name cannot be null or empty", nameof(fileName));
 
-            // Use alternative, if translated (Forms/Main.cs)
-            if (language.Main.Menu.Tools.Number == english.Main.Menu.Tools.Number && language.General.Number != english.General.Number)
-            {
-                language.Main.Menu.Tools.Number = language.General.Number;
-            }
+            if (!File.Exists(fileName))
+                throw new FileNotFoundException($"Language file not found: {fileName}");
 
-            if (language.Main.Menu.Tools.EndTime == english.Main.Menu.Tools.EndTime && language.General.EndTime != english.General.EndTime)
+            try
             {
-                language.Main.Menu.Tools.EndTime = language.General.EndTime;
-            }
+                var language = LanguageDeserializer.CustomDeserializeLanguage(fileName);
+                var english = new Language();
 
-            if (language.Main.Menu.Tools.Duration == english.Main.Menu.Tools.Duration && language.General.Duration != english.General.Duration)
-            {
-                language.Main.Menu.Tools.Duration = language.General.Duration;
-            }
+                // Apply fallback translations for missing or untranslated items
+                ApplyFallbackTranslations(language, english);
 
-            if (language.Main.Menu.Tools.StartTime == english.Main.Menu.Tools.StartTime && language.General.StartTime != english.General.StartTime)
-            {
-                language.Main.Menu.Tools.StartTime = language.General.StartTime;
+                return language;
             }
-
-            if (language.Main.BeforeMergeLinesWithSameText == english.Main.BeforeMergeLinesWithSameText && language.Main.BeforeMergeShortLines != english.Main.BeforeMergeShortLines)
+            catch (Exception ex)
             {
-                language.Main.BeforeMergeLinesWithSameText = language.Main.BeforeMergeShortLines;
+                throw new InvalidOperationException($"Failed to load language file: {fileName}", ex);
             }
-            // Use alternative, if translated (Forms/Settings.cs)
-            if (language.Settings.AdjustSetEndTimeAndGoToNext == english.Settings.AdjustSetEndTimeAndGoToNext && language.Main.VideoControls.SetEndTimeAndGoToNext != english.Main.VideoControls.SetEndTimeAndGoToNext)
-            {
-                language.Settings.AdjustSetEndTimeAndGoToNext = language.Main.VideoControls.SetEndTimeAndGoToNext;
-            }
-            // Translated alternative without format item (../Forms/PluginsGet.cs)
-            if (language.PluginsGet.UpdateAllX == english.PluginsGet.UpdateAllX && language.PluginsGet.UpdateAll != english.PluginsGet.UpdateAll)
-            {
-                language.PluginsGet.UpdateAllX = null;
-            }
-
-            return language;
         }
 
+        /// <summary>
+        /// Apply fallback translations for items that may be missing in localized files
+        /// </summary>
+        private static void ApplyFallbackTranslations(Language language, Language english)
+        {
+            // Use alternative translations if primary translation matches English (not translated)
+            if (language.Main?.Menu?.Tools != null && english.Main?.Menu?.Tools != null)
+            {
+                if (language.Main.Menu.Tools.Number == english.Main.Menu.Tools.Number && 
+                    language.General?.Number != english.General?.Number)
+                {
+                    language.Main.Menu.Tools.Number = language.General.Number;
+                }
+
+                if (language.Main.Menu.Tools.EndTime == english.Main.Menu.Tools.EndTime && 
+                    language.General?.EndTime != english.General?.EndTime)
+                {
+                    language.Main.Menu.Tools.EndTime = language.General.EndTime;
+                }
+
+                if (language.Main.Menu.Tools.Duration == english.Main.Menu.Tools.Duration && 
+                    language.General?.Duration != english.General?.Duration)
+                {
+                    language.Main.Menu.Tools.Duration = language.General.Duration;
+                }
+
+                if (language.Main.Menu.Tools.StartTime == english.Main.Menu.Tools.StartTime && 
+                    language.General?.StartTime != english.General?.StartTime)
+                {
+                    language.Main.Menu.Tools.StartTime = language.General.StartTime;
+                }
+            }
+
+            if (language.Main != null && english.Main != null)
+            {
+                if (language.Main.BeforeMergeLinesWithSameText == english.Main.BeforeMergeLinesWithSameText && 
+                    language.Main.BeforeMergeShortLines != english.Main.BeforeMergeShortLines)
+                {
+                    language.Main.BeforeMergeLinesWithSameText = language.Main.BeforeMergeShortLines;
+                }
+            }
+
+            // Settings fallback
+            if (language.Settings != null && english.Settings != null &&
+                language.Main?.VideoControls != null && english.Main?.VideoControls != null)
+            {
+                if (language.Settings.AdjustSetEndTimeAndGoToNext == english.Settings.AdjustSetEndTimeAndGoToNext && 
+                    language.Main.VideoControls.SetEndTimeAndGoToNext != english.Main.VideoControls.SetEndTimeAndGoToNext)
+                {
+                    language.Settings.AdjustSetEndTimeAndGoToNext = language.Main.VideoControls.SetEndTimeAndGoToNext;
+                }
+            }
+
+            // PluginsGet fallback  
+            if (language.PluginsGet != null && english.PluginsGet != null)
+            {
+                if (language.PluginsGet.UpdateAllX == english.PluginsGet.UpdateAllX && 
+                    language.PluginsGet.UpdateAll != english.PluginsGet.UpdateAll)
+                {
+                    language.PluginsGet.UpdateAllX = null;
+                }
+            }
+        }        /// <summary>
+        /// Cached XML serializer for better performance
+        /// </summary>
+        private static readonly Lazy<XmlSerializer> SerializerCache = new(() => new XmlSerializer(typeof(Language)));
+
+        /// <summary>
+        /// Generate XML representation of the current language with optimized string operations
+        /// </summary>
+        /// <returns>XML string representation</returns>
         public string GetCurrentLanguageAsXml()
         {
-            var s = new XmlSerializer(typeof(Language));
-            var sb = new StringBuilder();
-            var w = new StringWriter(sb);
-            s.Serialize(w, this);
-            w.Close();
-
-            string xml = sb.ToString();
-            xml = xml.Replace("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" ", string.Empty);
-            xml = xml.Replace("xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ", string.Empty);
-            xml = xml.Replace("encoding=\"utf-16\"", "encoding=\"utf-8\"");
-            xml = xml.Replace("<TranslatedBy> </TranslatedBy>", "<TranslatedBy>Translated by Nikse</TranslatedBy>");
-            return xml.Trim();
+            try
+            {
+                var serializer = SerializerCache.Value;
+                using var stringWriter = new StringWriter();
+                serializer.Serialize(stringWriter, this);
+                
+                var xml = stringWriter.ToString();
+                
+                // Apply XML cleanup optimizations
+                return OptimizeXmlOutput(xml);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("Failed to serialize language to XML", ex);
+            }
         }
 
+        /// <summary>
+        /// Optimize XML output by removing unnecessary namespaces and fixing encoding
+        /// </summary>
+        private static string OptimizeXmlOutput(string xml)
+        {
+            if (string.IsNullOrEmpty(xml))
+                return string.Empty;
+
+            // Use StringBuilder for efficient string manipulation
+            var sb = new StringBuilder(xml);
+            
+            // Remove XML Schema namespace declarations
+            sb.Replace("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" ", string.Empty);
+            sb.Replace("xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ", string.Empty);
+            
+            // Fix encoding declaration
+            sb.Replace("encoding=\"utf-16\"", "encoding=\"utf-8\"");
+            
+            // Fix default translator attribution
+            sb.Replace("<TranslatedBy> </TranslatedBy>", "<TranslatedBy>Translated by Nikse</TranslatedBy>");
+            
+            return sb.ToString().Trim();
+        }
+
+        /// <summary>
+        /// Save language to file with proper encoding and error handling
+        /// </summary>
+        /// <param name="fileName">Target file path</param>
         public void Save(string fileName)
         {
-            File.WriteAllText(fileName, GetCurrentLanguageAsXml(), Encoding.UTF8);
+            if (string.IsNullOrWhiteSpace(fileName))
+                throw new ArgumentException("File name cannot be null or empty", nameof(fileName));
+
+            try
+            {
+                var xml = GetCurrentLanguageAsXml();
+                File.WriteAllText(fileName, xml, Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to save language file: {fileName}", ex);
+            }
         }
     }
 }

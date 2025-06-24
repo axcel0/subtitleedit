@@ -3,21 +3,50 @@ using Nikse.SubtitleEdit.Core.ContainerFormats.Matroska;
 using Nikse.SubtitleEdit.Logic;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Nikse.SubtitleEdit.Core.Forms;
-using System.Diagnostics;
-using System.Drawing.Imaging;
 
 namespace Nikse.SubtitleEdit.Controls
 {
     public sealed partial class AudioVisualizer : UserControl
     {
+        #region Constants
+
+        // Zoom constraints
+        public const double ZoomMinimum = 0.1;
+        public const double ZoomMaximum = 2.5;
+        public const double VerticalZoomMinimum = 0.1;
+        public const double VerticalZoomMaximum = 20.0;
+
+        // Selection and timing constants
+        private const int MinimumSelectionMilliseconds = 100;
+        private const int DefaultClosenessForBorderSelection = 15;
+        private const double DefaultZoomFactor = 1.0;
+        private const double DefaultVerticalZoomFactor = 1.0;
+        private const float DefaultSpectrogramAlpha = 1.0f;
+        private const int DefaultWaveformAlpha = 255;
+        private const int DefaultShotChangeSnapPixels = 8;
+        private const double ZoomPrecision = 0.01;
+        private const int ZoomDecimalPlaces = 2;
+
+        // UI timing constants
+        private const long InvalidTimeValue = -1;
+        private const int InvalidPosition = -1;
+        private const double InvalidGapValue = -1;
+        private const double DefaultWholeParagraphMaxMs = double.MaxValue;
+
+        #endregion
+
+        #region Enums
+
         public enum MouseDownParagraphType
         {
             None,
@@ -27,92 +56,84 @@ namespace Nikse.SubtitleEdit.Controls
             StartOrEnd,
         }
 
-        public class MinMax
+        #endregion
+
+        #region Nested Types
+
+        public sealed class MinMax
         {
             public double Min { get; set; }
             public double Max { get; set; }
             public double Avg { get; set; }
+
+            public MinMax() { }
+
+            public MinMax(double min, double max, double avg)
+            {
+                Min = min;
+                Max = max;
+                Avg = avg;
+            }
         }
 
-        public class ParagraphEventArgs : EventArgs
+        public sealed class ParagraphEventArgs : EventArgs
         {
-            public Paragraph Paragraph { get; }
-            public double Seconds { get; }
+            public Paragraph Paragraph { get; init; }
+            public double Seconds { get; init; }
             public Paragraph BeforeParagraph { get; set; }
             public MouseDownParagraphType MouseDownParagraphType { get; set; }
             public bool MovePreviousOrNext { get; set; }
             public double AdjustMs { get; set; }
-            public ParagraphEventArgs(Paragraph p)
+
+            public ParagraphEventArgs(Paragraph paragraph)
             {
-                Paragraph = p;
+                Paragraph = paragraph ?? throw new ArgumentNullException(nameof(paragraph));
             }
-            public ParagraphEventArgs(double seconds, Paragraph p)
+
+            public ParagraphEventArgs(double seconds, Paragraph paragraph)
             {
                 Seconds = seconds;
-                Paragraph = p;
+                Paragraph = paragraph ?? throw new ArgumentNullException(nameof(paragraph));
             }
-            public ParagraphEventArgs(double seconds, Paragraph p, Paragraph b)
+
+            public ParagraphEventArgs(double seconds, Paragraph paragraph, Paragraph beforeParagraph)
             {
                 Seconds = seconds;
-                Paragraph = p;
-                BeforeParagraph = b;
+                Paragraph = paragraph ?? throw new ArgumentNullException(nameof(paragraph));
+                BeforeParagraph = beforeParagraph;
             }
-            public ParagraphEventArgs(double seconds, Paragraph p, Paragraph b, MouseDownParagraphType mouseDownParagraphType)
+
+            public ParagraphEventArgs(double seconds, Paragraph paragraph, Paragraph beforeParagraph, MouseDownParagraphType mouseDownParagraphType)
             {
                 Seconds = seconds;
-                Paragraph = p;
-                BeforeParagraph = b;
+                Paragraph = paragraph ?? throw new ArgumentNullException(nameof(paragraph));
+                BeforeParagraph = beforeParagraph;
                 MouseDownParagraphType = mouseDownParagraphType;
             }
-            public ParagraphEventArgs(double seconds, Paragraph p, Paragraph b, MouseDownParagraphType mouseDownParagraphType, bool movePreviousOrNext)
+
+            public ParagraphEventArgs(double seconds, Paragraph paragraph, Paragraph beforeParagraph, MouseDownParagraphType mouseDownParagraphType, bool movePreviousOrNext)
             {
                 Seconds = seconds;
-                Paragraph = p;
-                BeforeParagraph = b;
+                Paragraph = paragraph ?? throw new ArgumentNullException(nameof(paragraph));
+                BeforeParagraph = beforeParagraph;
                 MouseDownParagraphType = mouseDownParagraphType;
                 MovePreviousOrNext = movePreviousOrNext;
             }
         }
 
-        public int ClosenessForBorderSelection { get; set; } = 15;
-        public float SpectrogramAlpha { get; set; } = 1.0f;
-        public int WaveformAlpha { get; set; } = 255;
-        private const int MinimumSelectionMilliseconds = 100;
+        #endregion
 
-        private long _buttonDownTimeTicks;
-        private long _lastMouseWheelScroll = -1;
-        private int _mouseMoveLastX = -1;
-        private int _mouseMoveStartX = -1;
-        private double _moveWholeStartDifferenceMilliseconds = -1;
-        private int _mouseMoveEndX = -1;
-        private bool _mouseDown;
-        private Paragraph _oldParagraph;
-        private Paragraph _mouseDownParagraph;
-        private Paragraph[] _mouseDownParagraphs;
-        private MouseDownParagraphType _mouseDownParagraphType = MouseDownParagraphType.Start;
-        private readonly List<Paragraph> _displayableParagraphs;
-        private readonly List<Paragraph> _allSelectedParagraphs;
-        private Paragraph _prevParagraph;
-        private Paragraph _nextParagraph;
-        private bool _firstMove = true;
-        private double _currentVideoPositionSeconds = -1;
-        private WavePeakData _wavePeaks;
-        private Subtitle _subtitle;
-        private bool _noClear;
-        private double _gapAtStart = -1;
-
-        private SpectrogramData _spectrogram;
+        #region Events
 
         public delegate void ParagraphEventHandler(object sender, ParagraphEventArgs e);
+
         public event ParagraphEventHandler OnNewSelectionRightClicked;
         public event ParagraphEventHandler OnParagraphRightClicked;
         public event ParagraphEventHandler OnNonParagraphRightClicked;
         public event ParagraphEventHandler OnPositionSelected;
-
         public event ParagraphEventHandler OnTimeChanged;
         public event ParagraphEventHandler OnStartTimeChanged;
         public event ParagraphEventHandler OnTimeChangedAndOffsetRest;
-
         public event ParagraphEventHandler OnSingleClick;
         public event ParagraphEventHandler OnDoubleClickNonParagraph;
         public event EventHandler OnPause;
@@ -121,104 +142,124 @@ namespace Nikse.SubtitleEdit.Controls
         public event EventHandler OnPasteAtVideoPosition;
         public event EventHandler OnSelectAll;
 
+        #endregion
+
+        #region Fields
+
+        // Mouse and interaction state
+        private long _buttonDownTimeTicks;
+        private long _lastMouseWheelScroll = InvalidTimeValue;
+        private int _mouseMoveLastX = InvalidPosition;
+        private int _mouseMoveStartX = InvalidPosition;
+        private double _moveWholeStartDifferenceMilliseconds = InvalidPosition;
+        private int _mouseMoveEndX = InvalidPosition;
+        private bool _mouseDown;
+        private bool _firstMove = true;
+        private bool _noClear;
+
+        // Paragraph and selection state
+        private Paragraph _oldParagraph;
+        private Paragraph _mouseDownParagraph;
+        private Paragraph[] _mouseDownParagraphs;
+        private MouseDownParagraphType _mouseDownParagraphType = MouseDownParagraphType.Start;
+        private readonly List<Paragraph> _displayableParagraphs;
+        private readonly List<Paragraph> _allSelectedParagraphs;
+        private Paragraph _prevParagraph;
+        private Paragraph _nextParagraph;
+
+        // Audio and visual data
+        private double _currentVideoPositionSeconds = InvalidPosition;
+        private WavePeakData _wavePeaks;
+        private Subtitle _subtitle;
+        private double _gapAtStart = InvalidGapValue;
+        private SpectrogramData _spectrogram;
+
+        // Zoom and view state
+        private double _zoomFactor = DefaultZoomFactor;
+        private double _verticalZoomFactor = DefaultVerticalZoomFactor;
+        private List<double> _shotChanges = new();
+        private MatroskaChapter[] _chapters = Array.Empty<MatroskaChapter>();
+
+        // Configuration and constraints
         private double _wholeParagraphMinMilliseconds;
-        private double _wholeParagraphMaxMilliseconds = double.MaxValue;
+        private double _wholeParagraphMaxMilliseconds = DefaultWholeParagraphMaxMs;
+        private bool _showSpectrogram;
+        private bool _showWaveform;
+
+        #endregion
+
+        #region Properties
+
+        public int ClosenessForBorderSelection { get; set; } = DefaultClosenessForBorderSelection;
+        public float SpectrogramAlpha { get; set; } = DefaultSpectrogramAlpha;
+        public int WaveformAlpha { get; set; } = DefaultWaveformAlpha;
+        public int ShotChangeSnapPixels { get; set; } = DefaultShotChangeSnapPixels;
+
         public Keys InsertAtVideoPositionShortcut { get; set; }
         public Keys Move100MsLeft { get; set; }
         public Keys Move100MsRight { get; set; }
         public Keys MoveOneSecondLeft { get; set; }
         public Keys MoveOneSecondRight { get; set; }
         public bool MouseWheelScrollUpIsForward { get; set; } = true;
-
-        public const double ZoomMinimum = 0.1;
-        public const double ZoomMaximum = 2.5;
-        private double _zoomFactor = 1.0; // 1.0=no zoom
-
-        public int ShotChangeSnapPixels = 8;
+        public bool AllowOverlap { get; set; }
 
         public double ZoomFactor
         {
             get => _zoomFactor;
             set
             {
-                if (value < ZoomMinimum)
+                var clampedValue = Math.Clamp(value, ZoomMinimum, ZoomMaximum);
+                clampedValue = Math.Round(clampedValue, ZoomDecimalPlaces); // Prevent accumulated rounding errors
+                
+                if (Math.Abs(_zoomFactor - clampedValue) > ZoomPrecision)
                 {
-                    value = ZoomMinimum;
-                }
-
-                if (value > ZoomMaximum)
-                {
-                    value = ZoomMaximum;
-                }
-
-                value = Math.Round(value, 2); // round to prevent accumulated rounding errors
-                if (Math.Abs(_zoomFactor - value) > 0.01)
-                {
-                    _zoomFactor = value;
+                    _zoomFactor = clampedValue;
                     UpdateSnappingDistance();
                     Invalidate();
                 }
             }
         }
 
-        public const double VerticalZoomMinimum = 0.1;
-        public const double VerticalZoomMaximum = 20.0;
-        private double _verticalZoomFactor = 1.0; // 1.0=no zoom
-
         public double VerticalZoomFactor
         {
             get => _verticalZoomFactor;
             set
             {
-                if (value < VerticalZoomMinimum)
+                var clampedValue = Math.Clamp(value, VerticalZoomMinimum, VerticalZoomMaximum);
+                clampedValue = Math.Round(clampedValue, ZoomDecimalPlaces); // Prevent accumulated rounding errors
+                
+                if (Math.Abs(_verticalZoomFactor - clampedValue) > ZoomPrecision)
                 {
-                    value = VerticalZoomMinimum;
-                }
-
-                if (value > VerticalZoomMaximum)
-                {
-                    value = VerticalZoomMaximum;
-                }
-
-                value = Math.Round(value, 2); // round to prevent accumulated rounding errors
-                if (Math.Abs(_verticalZoomFactor - value) > 0.01)
-                {
-                    _verticalZoomFactor = value;
+                    _verticalZoomFactor = clampedValue;
                     Invalidate();
                 }
             }
         }
 
-        private List<double> _shotChanges = new List<double>();
-
         /// <summary>
-        /// Shot changes (seconds)
+        /// Shot changes in seconds
         /// </summary>
         public List<double> ShotChanges
         {
             get => _shotChanges;
             set
             {
-                _shotChanges = value;
+                _shotChanges = value ?? new List<double>();
                 Invalidate();
             }
         }
-
-        private MatroskaChapter[] _chapters = Array.Empty<MatroskaChapter>();
 
         public MatroskaChapter[] Chapters
         {
             get => _chapters;
             set
             {
-                _chapters = value;
+                _chapters = value ?? Array.Empty<MatroskaChapter>();
                 Invalidate();
             }
         }
 
-        public bool IsSpectrogramAvailable => _spectrogram != null && _spectrogram.Images.Count > 0;
-
-        private bool _showSpectrogram;
+        public bool IsSpectrogramAvailable => _spectrogram?.Images?.Count > 0;
 
         public bool ShowSpectrogram
         {
@@ -233,10 +274,6 @@ namespace Nikse.SubtitleEdit.Controls
             }
         }
 
-        public bool AllowOverlap { get; set; }
-
-        private bool _showWaveform;
-
         public bool ShowWaveform
         {
             get => _showWaveform;
@@ -249,6 +286,10 @@ namespace Nikse.SubtitleEdit.Controls
                 }
             }
         }
+
+        #endregion
+
+        #region Public Properties
 
         private double _startPositionSeconds;
 
@@ -265,12 +306,10 @@ namespace Nikse.SubtitleEdit.Controls
                         value -= endPositionSeconds - _wavePeaks.LengthInSeconds;
                     }
                 }
-                if (value < 0)
-                {
-                    value = 0;
-                }
+                
+                value = Math.Max(0, value);
 
-                if (Math.Abs(_startPositionSeconds - value) > 0.01)
+                if (Math.Abs(_startPositionSeconds - value) > ZoomPrecision)
                 {
                     _startPositionSeconds = value;
                     Invalidate();
@@ -296,7 +335,6 @@ namespace Nikse.SubtitleEdit.Controls
         public Color GridColor { get; set; }
         public bool ShowGridLines { get; set; }
         public bool AllowNewSelection { get; set; }
-
         public bool Locked { get; set; }
 
         public double EndPositionSeconds
@@ -317,19 +355,34 @@ namespace Nikse.SubtitleEdit.Controls
             get => _wavePeaks;
             set
             {
-                _zoomFactor = 1.0;
-                SelectedParagraph = null;
-                _buttonDownTimeTicks = 0;
-                _mouseMoveLastX = -1;
-                _mouseMoveStartX = -1;
-                _moveWholeStartDifferenceMilliseconds = -1;
-                _mouseMoveEndX = -1;
-                _mouseDown = false;
-                _mouseDownParagraph = null;
-                _mouseDownParagraphType = MouseDownParagraphType.Start;
-                _currentVideoPositionSeconds = -1;
-                _subtitle = new Subtitle();
-                _noClear = false;
+                ResetState();
+                _wavePeaks = value;
+                UpdateSnappingDistance();
+                Invalidate();
+            }
+        }
+
+        private void ResetState()
+        {
+            _zoomFactor = DefaultZoomFactor;
+            SelectedParagraph = null;
+            _buttonDownTimeTicks = 0;
+            ResetMouseState();
+            _moveWholeStartDifferenceMilliseconds = InvalidPosition;
+            _mouseDown = false;
+            _mouseDownParagraph = null;
+            _mouseDownParagraphType = MouseDownParagraphType.Start;
+            _currentVideoPositionSeconds = InvalidPosition;
+            _subtitle = new Subtitle();
+            _noClear = false;
+        }
+
+        private void ResetMouseState()
+        {
+            _mouseMoveLastX = InvalidPosition;
+            _mouseMoveStartX = InvalidPosition;
+            _mouseMoveEndX = InvalidPosition;
+        }
                 _wavePeaks = value;
 
                 UpdateSnappingDistance();
@@ -369,23 +422,43 @@ namespace Nikse.SubtitleEdit.Controls
             _mouseDownParagraph = null;
             _mouseMoveStartX = -1;
             _mouseMoveEndX = -1;
-            Invalidate();
-        }
+        #endregion
+
+        #region Constructor
 
         public AudioVisualizer()
+        {
+            InitializeControl();
+            InitializeCollections();
+            InitializeStyles();
+            InitializeColors();
+            InitializeSettings();
+            InitializeEvents();
+            UpdateSnappingDistance();
+        }
+
+        private void InitializeControl()
         {
             AutoScaleMode = AutoScaleMode.Dpi;
             Font = UiUtil.GetDefaultFont();
             InitializeComponent();
             UiUtil.FixFonts(this);
+        }
 
+        private void InitializeCollections()
+        {
             _displayableParagraphs = new List<Paragraph>();
             _allSelectedParagraphs = new List<Paragraph>();
+        }
 
+        private void InitializeStyles()
+        {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.DoubleBuffer, true);
             WaveformNotLoadedText = "Click to add waveform/spectrogram";
-            MouseWheel += WaveformMouseWheel;
+        }
 
+        private void InitializeColors()
+        {
             BackgroundColor = Color.Black;
             Color = Color.GreenYellow;
             SelectedColor = Color.Red;
@@ -394,14 +467,25 @@ namespace Nikse.SubtitleEdit.Controls
             TextSize = 9;
             TextBold = true;
             GridColor = Color.FromArgb(255, 20, 20, 18);
+        }
+
+        private void InitializeEvents()
+        {
+            MouseWheel += WaveformMouseWheel;
+        }
+
+        private void InitializeSettings()
+        {
             ShowGridLines = true;
             AllowNewSelection = true;
             ShowSpectrogram = true;
             ShowWaveform = true;
             InsertAtVideoPositionShortcut = UiUtil.GetKeys(Configuration.Settings.Shortcuts.MainWaveformInsertAtCurrentPosition);
-
-            UpdateSnappingDistance();
         }
+
+        #endregion
+
+        #region Key Input Handling
 
         protected override bool IsInputKey(Keys keyData)
         {
@@ -553,32 +637,177 @@ namespace Nikse.SubtitleEdit.Controls
                     End = end;
                 }
             }
+        private void CalculateWaveformBounds(ref double minValue, ref double maxValue)
+        {
+            // This would be implemented based on the waveform data processing
+            // For now, placeholder implementation
+            minValue = -1.0;
+            maxValue = 1.0;
         }
 
-        //private Stopwatch _sw;
-        //private readonly List<long> _ticks = new List<long>();
+        private void DrawWaveformData(WaveformRenderContext context, double minValue, double maxValue)
+        {
+            // This would be implemented based on the specific waveform rendering logic
+            // The actual implementation would depend on the WavePeakData structure
+        }
+
+        private void DrawShotChanges(Graphics graphics)
+        {
+            if (_shotChanges?.Count > 0)
+            {
+                using var pen = new Pen(Color.Red, 2);
+                foreach (var shotChange in _shotChanges)
+                {
+                    var x = SecondsToXPosition(shotChange - _startPositionSeconds);
+                    if (x >= 0 && x <= Width)
+                    {
+                        graphics.DrawLine(pen, x, 0, x, Height);
+                    }
+                }
+            }
+        }
+
+        private void DrawChapters(Graphics graphics)
+        {
+            if (_chapters?.Length > 0)
+            {
+                using var pen = new Pen(ChaptersColor, 2);
+                foreach (var chapter in _chapters)
+                {
+                    var x = SecondsToXPosition(chapter.Start - _startPositionSeconds);
+                    if (x >= 0 && x <= Width)
+                    {
+                        graphics.DrawLine(pen, x, 0, x, Height);
+                    }
+                }
+            }
+        }
+
+        private void DrawParagraphs(Graphics graphics, int height)
+        {
+            // This would iterate through displayable paragraphs and draw them
+            // Implementation depends on the paragraph rendering logic
+        }
+
+        private void DrawCurrentPosition(Graphics graphics, int height)
+        {
+            if (_currentVideoPositionSeconds >= 0)
+            {
+                var x = SecondsToXPosition(_currentVideoPositionSeconds - _startPositionSeconds);
+                if (x >= 0 && x <= Width)
+                {
+                    using var pen = new Pen(CursorColor, 2);
+                    graphics.DrawLine(pen, x, 0, x, height);
+                }
+            }
+        }
+
+        private void DrawSelection(Graphics graphics, int height)
+        {
+            if (NewSelectionParagraph != null)
+            {
+                var left = SecondsToXPosition(NewSelectionParagraph.StartTime.TotalSeconds - _startPositionSeconds);
+                var right = SecondsToXPosition(NewSelectionParagraph.EndTime.TotalSeconds - _startPositionSeconds);
+                
+                if (right > left && left < Width && right > 0)
+                {
+                    using var brush = new SolidBrush(Color.FromArgb(128, SelectedColor));
+                    var rect = new Rectangle(Math.Max(0, left), 0, Math.Min(Width - Math.Max(0, left), right - left), height);
+                    graphics.FillRectangle(brush, rect);
+                }
+            }
+        }
+
+        #endregion
+
+        #region Helper Methods
+
         internal void WaveformPaint(object sender, PaintEventArgs e)
         {
-            //            _sw = Stopwatch.StartNew();
             var graphics = e.Graphics;
-            if (_wavePeaks != null)
+            if (_wavePeaks == null)
             {
-                var showSpectrogram = _showSpectrogram && IsSpectrogramAvailable;
-                var showSpectrogramOnly = showSpectrogram && !_showWaveform;
-                var waveformHeight = Height;
+                DrawEmptyWaveform(graphics);
+                return;
+            }
 
-                // background
-                graphics.Clear(BackgroundColor);
+            var renderContext = new WaveformRenderContext
+            {
+                Graphics = graphics,
+                ShowSpectrogram = _showSpectrogram && IsSpectrogramAvailable,
+                WaveformHeight = Height
+            };
 
-                // grid lines
-                if (ShowGridLines && !showSpectrogramOnly)
-                {
-                    DrawGridLines(graphics, waveformHeight);
-                }
+            renderContext.ShowSpectrogramOnly = renderContext.ShowSpectrogram && !_showWaveform;
 
-                // spectrogram
-                if (showSpectrogram)
-                {
+            // Clear background
+            graphics.Clear(BackgroundColor);
+
+            // Draw grid lines
+            if (ShowGridLines && !renderContext.ShowSpectrogramOnly)
+            {
+                DrawGridLines(graphics, renderContext.WaveformHeight);
+            }
+
+            // Draw spectrogram
+            if (renderContext.ShowSpectrogram)
+            {
+                DrawSpectrogram(graphics, renderContext.WaveformHeight);
+            }
+
+            // Draw waveform
+            if (_showWaveform)
+            {
+                DrawWaveform(renderContext);
+            }
+
+            // Draw overlays
+            DrawOverlays(renderContext);
+        }
+
+        private void DrawEmptyWaveform(Graphics graphics)
+        {
+            graphics.Clear(BackgroundColor);
+            
+            if (!string.IsNullOrEmpty(WaveformNotLoadedText))
+            {
+                using var textBrush = new SolidBrush(TextColor);
+                using var font = new Font(Font.FontFamily, TextSize, TextBold ? FontStyle.Bold : FontStyle.Regular);
+                var textSize = graphics.MeasureString(WaveformNotLoadedText, font);
+                var x = (Width - textSize.Width) / 2;
+                var y = (Height - textSize.Height) / 2;
+                graphics.DrawString(WaveformNotLoadedText, font, textBrush, x, y);
+            }
+        }
+
+        private void DrawWaveform(WaveformRenderContext context)
+        {
+            var minValue = double.MaxValue;
+            var maxValue = double.MinValue;
+
+            // Calculate min/max values for scaling
+            CalculateWaveformBounds(ref minValue, ref maxValue);
+
+            // Draw waveform data
+            DrawWaveformData(context, minValue, maxValue);
+        }
+
+        private void DrawOverlays(WaveformRenderContext context)
+        {
+            DrawShotChanges(context.Graphics);
+            DrawChapters(context.Graphics);
+            DrawParagraphs(context.Graphics, context.WaveformHeight);
+            DrawCurrentPosition(context.Graphics, context.WaveformHeight);
+            DrawSelection(context.Graphics, context.WaveformHeight);
+        }
+
+        private struct WaveformRenderContext
+        {
+            public Graphics Graphics;
+            public bool ShowSpectrogram;
+            public bool ShowSpectrogramOnly;
+            public int WaveformHeight;
+        }
                     DrawSpectrogram(graphics, waveformHeight);
                 }
 
@@ -896,45 +1125,66 @@ namespace Nikse.SubtitleEdit.Controls
 
         private void DrawGridLines(Graphics graphics, int imageHeight)
         {
+            using var pen = new Pen(GridColor);
+            
             if (_wavePeaks == null)
             {
-                using (var pen = new Pen(new SolidBrush(GridColor)))
-                {
-                    for (var i = 0; i < Width; i += 10)
-                    {
-                        graphics.DrawLine(pen, i, 0, i, imageHeight);
-                        graphics.DrawLine(pen, 0, i, Width, i);
-                    }
-                }
+                DrawStaticGridLines(graphics, pen, imageHeight);
             }
             else
             {
-                var seconds = Math.Ceiling(_startPositionSeconds) - _startPositionSeconds - 1;
-                var xPosition = SecondsToXPosition(seconds);
-                var yPosition = 0;
-                var yCounter = 0d;
-                var interval = _zoomFactor >= 0.4d ?
-                    0.1d : // a pixel is 0.1 second
-                    1.0d;  // a pixel is 1.0 second
-                using (var pen = new Pen(GridColor))
-                {
-                    while (xPosition < Width)
-                    {
-                        graphics.DrawLine(pen, xPosition, 0, xPosition, imageHeight);
-
-                        seconds += interval;
-                        xPosition = SecondsToXPosition(seconds);
-                    }
-
-                    while (yPosition < Height)
-                    {
-                        graphics.DrawLine(pen, 0, yPosition, Width, yPosition);
-
-                        yCounter += interval;
-                        yPosition = Convert.ToInt32(yCounter * _wavePeaks.SampleRate * _zoomFactor);
-                    }
-                }
+                DrawWaveformGridLines(graphics, pen, imageHeight);
             }
+        }
+
+        private void DrawStaticGridLines(Graphics graphics, Pen pen, int imageHeight)
+        {
+            const int gridSpacing = 10;
+            
+            for (var i = 0; i < Width; i += gridSpacing)
+            {
+                graphics.DrawLine(pen, i, 0, i, imageHeight);
+            }
+            
+            for (var i = 0; i < imageHeight; i += gridSpacing)
+            {
+                graphics.DrawLine(pen, 0, i, Width, i);
+            }
+        }
+
+        private void DrawWaveformGridLines(Graphics graphics, Pen pen, int imageHeight)
+        {
+            var seconds = Math.Ceiling(_startPositionSeconds) - _startPositionSeconds - 1;
+            var interval = _zoomFactor >= 0.4d ? 0.1d : 1.0d; // 0.1 or 1.0 second intervals
+
+            DrawVerticalGridLines(graphics, pen, seconds, interval, imageHeight);
+            DrawHorizontalGridLines(graphics, pen, interval);
+        }
+
+        private void DrawVerticalGridLines(Graphics graphics, Pen pen, double seconds, double interval, int imageHeight)
+        {
+            var xPosition = SecondsToXPosition(seconds);
+            
+            while (xPosition < Width)
+            {
+                graphics.DrawLine(pen, xPosition, 0, xPosition, imageHeight);
+                seconds += interval;
+                xPosition = SecondsToXPosition(seconds);
+            }
+        }
+
+        private void DrawHorizontalGridLines(Graphics graphics, Pen pen, double interval)
+        {
+            var yPosition = 0;
+            var yCounter = 0d;
+            
+            while (yPosition < Height)
+            {
+                graphics.DrawLine(pen, 0, yPosition, Width, yPosition);
+                yCounter += interval;
+                yPosition = Convert.ToInt32(yCounter * _wavePeaks.SampleRate * _zoomFactor);
+            }
+        }
         }
 
         private void DrawTimeLine(Graphics graphics, int imageHeight)
@@ -2754,16 +3004,19 @@ namespace Nikse.SubtitleEdit.Controls
         {
             if (_wavePeaks != null)
             {
-                var largestGapInFrames = Math.Max(Configuration.Settings.BeautifyTimeCodes.Profile.InCuesGap, Configuration.Settings.BeautifyTimeCodes.Profile.OutCuesGap);
+                var profile = Configuration.Settings.BeautifyTimeCodes.Profile;
+                var largestGapInFrames = Math.Max(profile.InCuesGap, profile.OutCuesGap);
                 var pixelsPerFrame = (_wavePeaks.SampleRate * _zoomFactor) / Configuration.Settings.General.CurrentFrameRate;
                 var snappingDistance = (int)Math.Round(pixelsPerFrame * Math.Max(1, largestGapInFrames));
 
-                ShotChangeSnapPixels = Math.Max(8, snappingDistance);
+                ShotChangeSnapPixels = Math.Max(DefaultShotChangeSnapPixels, snappingDistance);
             }
             else
             {
-                ShotChangeSnapPixels = 8;
+                ShotChangeSnapPixels = DefaultShotChangeSnapPixels;
             }
         }
+
+        #endregion
     }
 }

@@ -1,11 +1,20 @@
 ﻿namespace Nikse.SubtitleEdit.Controls
 {
+    /// <summary>
+    /// Designer class for NikseComboBoxPopUp.
+    /// </summary>
     sealed partial class NikseComboBoxPopUp
     {
+        #region Fields
+
         /// <summary>
         /// Required designer variable.
         /// </summary>
         private System.ComponentModel.IContainer components = null;
+
+        #endregion
+
+        #region Dispose Pattern
 
         /// <summary>
         /// Clean up any resources being used.
@@ -13,12 +22,14 @@
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                components?.Dispose();
             }
             base.Dispose(disposing);
         }
+
+        #endregion
 
         #region Windows Form Designer generated code
 
@@ -28,20 +39,21 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.SuspendLayout();
+            SuspendLayout();
+            
             // 
             // NikseComboBoxPopUp
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(800, 450);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
-            this.Name = "NikseComboBoxPopUp";
-            this.ShowIcon = false;
-            this.ShowInTaskbar = false;
-            this.Text = "NikseComboBoxPopUp";
-            this.ResumeLayout(false);
-
+            AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
+            AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            ClientSize = new System.Drawing.Size(800, 450);
+            FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
+            Name = "NikseComboBoxPopUp";
+            ShowIcon = false;
+            ShowInTaskbar = false;
+            Text = "NikseComboBoxPopUp";
+            
+            ResumeLayout(false);
         }
 
         #endregion

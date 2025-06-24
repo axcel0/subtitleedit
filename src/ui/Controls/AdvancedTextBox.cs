@@ -9,6 +9,8 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace Nikse.SubtitleEdit.Controls
@@ -16,12 +18,45 @@ namespace Nikse.SubtitleEdit.Controls
     /// <summary>
     /// RichTextBox with syntax highlighting and spell check.
     /// </summary>
-    public sealed class AdvancedTextBox : RichTextBox, IDoSpell
+    public sealed class AdvancedTextBox : RichTextBox, IDoSpell, IDisposable
     {
+        #region Constants
+
+        // Windows messages
+        private const int WM_PAINT = 0x0F;
+        private const int WM_LBUTTONDBLCLK = 0x0203;
+
+        // Spell check constants
+        private const int SuggestionTimeoutMs = 3000;
+        private const int MinWordLength = 2;
+        private const int MinWordLengthSingleChar = 1;
+        private const int MaxColorDifference = 60;
+        private const int AutoDetectSampleSize = 300;
+        private const int SmallAutoDetectSampleSize = 100;
+        
+        // Character constants
+        private const string TrimChars = "'`*#\u200E\u200F\u202A\u202B\u202C\u202D\u202E\u200B\uFEFF";
+        private const string UnicodeSpaces = "\u200b\u2060\ufeff";
+        
+        // HTML/ASSA tag patterns
+        private static readonly string[] HtmlTags = { "<i>", "<b>", "<u>", "</i>", "</b>", "</u>", "<box>", "</box>", "</font>" };
+        private static readonly string[] CommonDomains = { "com", "org", "net" };
+
+        // Character arrays for performance
+        private static readonly char[] SplitChars = { ' ', '.', ',', '?', '!', ':', ';', '"', '"', '"', '(', ')', '[', ']', '{', '}', '|', '<', '>', '/', '+', '¿', '¡', '…', '—', '–', '♪', '♫', '„', '«', '»', '‹', '›', '؛', '،', '؟' };
+        private static readonly char[] NumberAndPunctuationChars = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ',', '،' };
+        private static readonly char[] BracketEndChars = { '}', '\\', '&' };
+        private static readonly char[] HyphenChars = { '-', '‑' };
+
+        #endregion
+
+        #region Fields
+
         private bool _checkRtfChange = true;
         private int _mouseMoveSelectionLength;
+        private bool _isDisposed;
 
-        private bool IsLiveSpellCheckEnabled => Configuration.Settings.Tools.LiveSpellCheck && Parent?.Name == Main.MainTextBox;
+        // Spell check fields
         private Hunspell _hunspell;
         private SpellCheckWordLists _spellCheckWordLists;
         private List<SpellCheckWord> _words;
@@ -32,7 +67,11 @@ namespace Nikse.SubtitleEdit.Controls
         private string _currentDictionary;
         private string _uiTextBoxOldText;
 
-        private static readonly char[] SplitChars = { ' ', '.', ',', '?', '!', ':', ';', '"', '“', '”', '(', ')', '[', ']', '{', '}', '|', '<', '>', '/', '+', '¿', '¡', '…', '—', '–', '♪', '♫', '„', '«', '»', '‹', '›', '؛', '،', '؟' };
+        #endregion
+
+        #region Properties
+
+        private bool IsLiveSpellCheckEnabled => Configuration.Settings.Tools.LiveSpellCheck && Parent?.Name == Main.MainTextBox;
 
         public int CurrentLineIndex { get; set; }
         public string CurrentLanguage { get; set; }
@@ -42,18 +81,18 @@ namespace Nikse.SubtitleEdit.Controls
         public bool IsDictionaryDownloaded { get; set; } = true;
         public bool IsSpellCheckRequested { get; set; }
 
-        public class SuggestionParameter
+        public sealed class SuggestionParameter
         {
-            public string InputWord { get; set; }
-            public List<string> Suggestions { get; set; }
-            public Hunspell Hunspell { get; set; }
+            public string InputWord { get; init; }
+            public List<string> Suggestions { get; init; }
+            public Hunspell Hunspell { get; init; }
             public bool Success { get; set; }
 
             public SuggestionParameter(string word, Hunspell hunspell)
             {
-                InputWord = word;
+                InputWord = word ?? throw new ArgumentNullException(nameof(word));
                 Suggestions = new List<string>();
-                Hunspell = hunspell;
+                Hunspell = hunspell ?? throw new ArgumentNullException(nameof(hunspell));
                 Success = false;
             }
         }
@@ -61,88 +100,103 @@ namespace Nikse.SubtitleEdit.Controls
         public AdvancedTextBox()
         {
             DetectUrls = false;
-
             SetTextPosInRtbIfCentered();
+            InitializeEvents();
+        }
 
-            // Live spell check events.
+        private void InitializeEvents()
+        {
+            // Live spell check events
             KeyPress += UiTextBox_KeyPress;
             KeyDown += UiTextBox_KeyDown;
             MouseDown += UiTextBox_MouseDown;
             TextChanged += TextChangedHighlight;
-            HandleCreated += (sender, args) =>
-            {
-                SetTextPosInRtbIfCentered();
-            };
-            MouseDown += (sender, args) =>
-            {
-                // avoid selection when centered and clicking to the left
-                var charIndex = GetCharIndexFromPosition(args.Location);
-                if (Configuration.Settings.General.CenterSubtitleInTextBox &&
-                    _mouseMoveSelectionLength == 0 &&
-                    (charIndex == 0 || charIndex >= 0 && base.Text[charIndex - 1] == '\n'))
-                {
-                    SelectionLength = 0;
-                }
-            };
-            MouseMove += (sender, args) =>
-            {
-                _mouseMoveSelectionLength = SelectionLength;
-            };
-            KeyDown += (sender, args) =>
-            {
-                // fix annoying "beeps" when moving cursor position
-                var startOfLineDirection = Keys.Left;
-                var endOfLineDirection = Keys.Right;
-                if (Configuration.Settings.General.RightToLeftMode)
-                {
-                    startOfLineDirection = Keys.Right;
-                    endOfLineDirection = Keys.Left;
-                }
+            
+            HandleCreated += (sender, args) => SetTextPosInRtbIfCentered();
+            
+            MouseDown += HandleMouseDownForCentering;
+            MouseMove += HandleMouseMove;
+            KeyDown += HandleKeyDownNavigation;
+        }
 
-                if ((args.KeyData == startOfLineDirection || args.KeyData == Keys.PageUp) && SelectionStart == 0 && SelectionLength == 0)
-                {
-                    args.SuppressKeyPress = true;
-                }
-                else if (args.KeyData == Keys.Up && SelectionStart <= Text.IndexOf('\n'))
-                {
-                    args.SuppressKeyPress = true;
-                }
-                else if (args.KeyData == Keys.Home && (SelectionStart == 0 || (SelectionStart > 0 && Text[SelectionStart - 1] == '\n')))
-                {
-                    args.SuppressKeyPress = true;
-                }
-                else if (args.KeyData == (Keys.Home | Keys.Control) && SelectionStart == 0)
-                {
-                    args.SuppressKeyPress = true;
-                }
-                else if (args.KeyData == Keys.End && (SelectionStart >= Text.Length || (SelectionStart + 1 < Text.Length && Text[SelectionStart + 1] == '\n')))
-                {
-                    args.SuppressKeyPress = true;
-                }
-                else if (args.KeyData == (Keys.End | Keys.Control) && SelectionStart >= Text.Length)
-                {
-                    args.SuppressKeyPress = true;
-                }
-                else if (args.KeyData == endOfLineDirection && SelectionStart >= Text.Length)
-                {
-                    if (IsLiveSpellCheckEnabled)
-                    {
-                        IsSpellCheckRequested = true;
-                        TextChangedHighlight(this, EventArgs.Empty);
-                    }
+        private void HandleMouseDownForCentering(object sender, MouseEventArgs args)
+        {
+            // Avoid selection when centered and clicking to the left
+            var charIndex = GetCharIndexFromPosition(args.Location);
+            if (Configuration.Settings.General.CenterSubtitleInTextBox &&
+                _mouseMoveSelectionLength == 0 &&
+                (charIndex == 0 || (charIndex >= 0 && base.Text[charIndex - 1] == '\n')))
+            {
+                SelectionLength = 0;
+            }
+        }
 
-                    args.SuppressKeyPress = true;
-                }
-                else if (args.KeyData == Keys.Down && SelectionStart >= Text.Length)
+        private void HandleMouseMove(object sender, MouseEventArgs args)
+        {
+            _mouseMoveSelectionLength = SelectionLength;
+        }
+
+        private void HandleKeyDownNavigation(object sender, KeyEventArgs args)
+        {
+            // Fix annoying "beeps" when moving cursor position
+            var startOfLineDirection = Configuration.Settings.General.RightToLeftMode ? Keys.Right : Keys.Left;
+            var endOfLineDirection = Configuration.Settings.General.RightToLeftMode ? Keys.Left : Keys.Right;
+
+            var suppressKey = ShouldSuppressKey(args.KeyData, startOfLineDirection, endOfLineDirection);
+            if (suppressKey)
+            {
+                if (args.KeyData == endOfLineDirection && SelectionStart >= Text.Length && IsLiveSpellCheckEnabled)
                 {
-                    args.SuppressKeyPress = true;
+                    IsSpellCheckRequested = true;
+                    TextChangedHighlight(this, EventArgs.Empty);
                 }
-                else if (args.KeyData == Keys.PageDown && SelectionStart >= Text.Length)
-                {
-                    args.SuppressKeyPress = true;
-                }
+                args.SuppressKeyPress = true;
+            }
+        }
+
+        private bool ShouldSuppressKey(Keys keyData, Keys startOfLineDirection, Keys endOfLineDirection)
+        {
+            var textLength = Text.Length;
+            var newlineIndex = Text.IndexOf('\n');
+            
+            return keyData switch
+            {
+                _ when keyData == startOfLineDirection || keyData == Keys.PageUp => SelectionStart == 0 && SelectionLength == 0,
+                Keys.Up => SelectionStart <= newlineIndex,
+                Keys.Home when SelectionStart == 0 || (SelectionStart > 0 && Text[SelectionStart - 1] == '\n') => true,
+                Keys.Home | Keys.Control when SelectionStart == 0 => true,
+                Keys.End when SelectionStart >= textLength || (SelectionStart + 1 < textLength && Text[SelectionStart + 1] == '\n') => true,
+                Keys.End | Keys.Control when SelectionStart >= textLength => true,
+                _ when keyData == endOfLineDirection && SelectionStart >= textLength => true,
+                Keys.Down when SelectionStart >= textLength => true,
+                Keys.PageDown when SelectionStart >= textLength => true,
+                _ => false
             };
         }
+
+        #endregion
+
+        #region IDisposable Implementation
+
+        public new void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (!_isDisposed && disposing)
+            {
+                DisposeHunspellAndDictionaries();
+                _isDisposed = true;
+            }
+            base.Dispose(disposing);
+        }
+
+        #endregion
+
+        #region Text Properties Override
 
         public override string Text
         {
@@ -327,113 +381,156 @@ namespace Nikse.SubtitleEdit.Controls
             SelectionColor = ForeColor;
             SelectionBackColor = BackColor;
 
-            var htmlTagOn = false;
-            var htmlTagFontOn = false;
-            var htmlTagStart = -1;
-            var assaTagOn = false;
-            var assaPrimaryColorTagOn = false;
-            var assaSecondaryColorTagOn = false;
-            var assaBorderColorTagOn = false;
-            var assaShadowColorTagOn = false;
-            var assaTagStart = -1;
-            var tagOn = -1;
             var text = Text;
             var textLength = text.Length;
-            var i = 0;
-
-            while (i < textLength)
+            
+            // State tracking for tags
+            var tagState = new TagHighlightState();
+            
+            for (var i = 0; i < textLength; i++)
             {
                 var ch = text[i];
-                if (assaTagOn)
+                
+                if (tagState.AssaTagOn)
                 {
-                    if (ch == '}' && tagOn >= 0)
-                    {
-                        assaTagOn = false;
-                        SelectionStart = assaTagStart;
-                        SelectionLength = i - assaTagStart + 1;
-                        SelectionColor = Configuration.Settings.General.SubtitleTextBoxAssColor;
-                        if (assaTagStart >= 0)
-                        {
-                            if (assaPrimaryColorTagOn)
-                            {
-                                var colorTag = text.IndexOf("\\c", assaTagStart, StringComparison.OrdinalIgnoreCase) != -1 ? "\\c" : "\\1c";
-                                SetAssaColor(text, assaTagStart, colorTag);
-                                assaPrimaryColorTagOn = false;
-                            }
-
-                            if (assaSecondaryColorTagOn)
-                            {
-                                SetAssaColor(text, assaTagStart, "\\2c");
-                                assaSecondaryColorTagOn = false;
-                            }
-
-                            if (assaBorderColorTagOn)
-                            {
-                                SetAssaColor(text, assaTagStart, "\\3c");
-                                assaBorderColorTagOn = false;
-                            }
-
-                            if (assaShadowColorTagOn)
-                            {
-                                SetAssaColor(text, assaTagStart, "\\4c");
-                                assaShadowColorTagOn = false;
-                            }
-                        }
-
-                        assaTagStart = -1;
-                    }
+                    ProcessAssaTag(text, i, ch, ref tagState);
                 }
-                else if (htmlTagOn)
+                else if (tagState.HtmlTagOn)
                 {
-                    if (ch == '>' && tagOn >= 0)
-                    {
-                        htmlTagOn = false;
-                        SelectionStart = htmlTagStart;
-                        SelectionLength = i - htmlTagStart + 1;
-                        SelectionColor = Configuration.Settings.General.SubtitleTextBoxHtmlColor;
-                        if (htmlTagFontOn && htmlTagStart >= 0)
-                        {
-                            SetHtmlColor(text, htmlTagStart);
-                            htmlTagFontOn = false;
-                        }
-                        htmlTagStart = -1;
-                    }
+                    ProcessHtmlTag(text, i, ch, ref tagState);
                 }
-                else if (ch == '{' && i < textLength - 1 && text[i + 1] == '\\' && text.IndexOf('}', i) > 0)
+                else if (ch == '{' && IsAssaTagStart(text, i, textLength))
                 {
-                    var s = text.Substring(i);
-                    assaTagOn = true;
-                    tagOn = i;
-                    assaTagStart = i;
-                    assaPrimaryColorTagOn = s.Contains("\\c", StringComparison.OrdinalIgnoreCase) || s.Contains("\\1c", StringComparison.OrdinalIgnoreCase);
-                    assaSecondaryColorTagOn = s.Contains("\\2c", StringComparison.OrdinalIgnoreCase);
-                    assaBorderColorTagOn = s.Contains("\\3c", StringComparison.OrdinalIgnoreCase);
-                    assaShadowColorTagOn = s.Contains("\\4c", StringComparison.OrdinalIgnoreCase);
+                    StartAssaTag(text, i, ref tagState);
                 }
-                else if (ch == '<')
+                else if (ch == '<' && IsHtmlTagStart(text, i))
                 {
-                    var s = text.Substring(i);
-                    if (s.StartsWith("<i>", StringComparison.OrdinalIgnoreCase) ||
-                        s.StartsWith("<b>", StringComparison.OrdinalIgnoreCase) ||
-                        s.StartsWith("<u>", StringComparison.OrdinalIgnoreCase) ||
-                        s.StartsWith("</i>", StringComparison.OrdinalIgnoreCase) ||
-                        s.StartsWith("</b>", StringComparison.OrdinalIgnoreCase) ||
-                        s.StartsWith("</u>", StringComparison.OrdinalIgnoreCase) ||
-                        s.StartsWith("<box>", StringComparison.OrdinalIgnoreCase) ||
-                        s.StartsWith("</box>", StringComparison.OrdinalIgnoreCase) ||
-                        s.StartsWith("</font>", StringComparison.OrdinalIgnoreCase) ||
-                        (s.StartsWith("<font ", StringComparison.OrdinalIgnoreCase) &&
-                         text.IndexOf("</font>", i, StringComparison.OrdinalIgnoreCase) > 0))
-                    {
-                        htmlTagOn = true;
-                        htmlTagStart = i;
-                        htmlTagFontOn = s.StartsWith("<font ", StringComparison.OrdinalIgnoreCase);
-                        tagOn = i;
-                    }
+                    StartHtmlTag(text, i, ref tagState);
                 }
-
-                i++;
             }
+        }
+
+        private static bool IsAssaTagStart(string text, int i, int textLength)
+        {
+            return i < textLength - 1 && text[i + 1] == '\\' && text.IndexOf('}', i) > 0;
+        }
+
+        private bool IsHtmlTagStart(string text, int i)
+        {
+            var remainingText = text.AsSpan(i);
+            
+            // Check for known HTML tags
+            foreach (var tag in HtmlTags)
+            {
+                if (remainingText.StartsWith(tag.AsSpan(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            
+            // Check for font tag with attributes
+            return remainingText.StartsWith("<font ".AsSpan(), StringComparison.OrdinalIgnoreCase) &&
+                   text.IndexOf("</font>", i, StringComparison.OrdinalIgnoreCase) > 0;
+        }
+
+        private void StartAssaTag(string text, int i, ref TagHighlightState state)
+        {
+            var tagText = text.AsSpan(i);
+            state.AssaTagOn = true;
+            state.TagOn = i;
+            state.AssaTagStart = i;
+            state.AssaPrimaryColorTagOn = tagText.Contains("\\c".AsSpan(), StringComparison.OrdinalIgnoreCase) || 
+                                         tagText.Contains("\\1c".AsSpan(), StringComparison.OrdinalIgnoreCase);
+            state.AssaSecondaryColorTagOn = tagText.Contains("\\2c".AsSpan(), StringComparison.OrdinalIgnoreCase);
+            state.AssaBorderColorTagOn = tagText.Contains("\\3c".AsSpan(), StringComparison.OrdinalIgnoreCase);
+            state.AssaShadowColorTagOn = tagText.Contains("\\4c".AsSpan(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void StartHtmlTag(string text, int i, ref TagHighlightState state)
+        {
+            state.HtmlTagOn = true;
+            state.HtmlTagStart = i;
+            state.HtmlTagFontOn = text.AsSpan(i).StartsWith("<font ".AsSpan(), StringComparison.OrdinalIgnoreCase);
+            state.TagOn = i;
+        }
+
+        private void ProcessAssaTag(string text, int i, char ch, ref TagHighlightState state)
+        {
+            if (ch == '}' && state.TagOn >= 0)
+            {
+                state.AssaTagOn = false;
+                SelectionStart = state.AssaTagStart;
+                SelectionLength = i - state.AssaTagStart + 1;
+                SelectionColor = Configuration.Settings.General.SubtitleTextBoxAssColor;
+                
+                if (state.AssaTagStart >= 0)
+                {
+                    ProcessAssaColorTags(text, state);
+                }
+                
+                state.AssaTagStart = -1;
+            }
+        }
+
+        private void ProcessAssaColorTags(string text, TagHighlightState state)
+        {
+            if (state.AssaPrimaryColorTagOn)
+            {
+                var colorTag = text.IndexOf("\\c", state.AssaTagStart, StringComparison.OrdinalIgnoreCase) != -1 ? "\\c" : "\\1c";
+                SetAssaColor(text, state.AssaTagStart, colorTag);
+                state.AssaPrimaryColorTagOn = false;
+            }
+
+            if (state.AssaSecondaryColorTagOn)
+            {
+                SetAssaColor(text, state.AssaTagStart, "\\2c");
+                state.AssaSecondaryColorTagOn = false;
+            }
+
+            if (state.AssaBorderColorTagOn)
+            {
+                SetAssaColor(text, state.AssaTagStart, "\\3c");
+                state.AssaBorderColorTagOn = false;
+            }
+
+            if (state.AssaShadowColorTagOn)
+            {
+                SetAssaColor(text, state.AssaTagStart, "\\4c");
+                state.AssaShadowColorTagOn = false;
+            }
+        }
+
+        private void ProcessHtmlTag(string text, int i, char ch, ref TagHighlightState state)
+        {
+            if (ch == '>' && state.TagOn >= 0)
+            {
+                state.HtmlTagOn = false;
+                SelectionStart = state.HtmlTagStart;
+                SelectionLength = i - state.HtmlTagStart + 1;
+                SelectionColor = Configuration.Settings.General.SubtitleTextBoxHtmlColor;
+                
+                if (state.HtmlTagFontOn && state.HtmlTagStart >= 0)
+                {
+                    SetHtmlColor(text, state.HtmlTagStart);
+                    state.HtmlTagFontOn = false;
+                }
+                
+                state.HtmlTagStart = -1;
+            }
+        }
+
+        private struct TagHighlightState
+        {
+            public bool HtmlTagOn;
+            public bool HtmlTagFontOn;
+            public int HtmlTagStart;
+            public bool AssaTagOn;
+            public bool AssaPrimaryColorTagOn;
+            public bool AssaSecondaryColorTagOn;
+            public bool AssaBorderColorTagOn;
+            public bool AssaShadowColorTagOn;
+            public int AssaTagStart;
+            public int TagOn;
         }
 
         private void SetHtmlColor(string text, int htmlTagStart)
@@ -511,15 +608,17 @@ namespace Nikse.SubtitleEdit.Controls
             SelectionLength = colorEnd - colorStart;
             SelectionColor = c;
 
+            // Calculate color difference more efficiently
             var diff = Math.Abs(c.R - backColor.R) + Math.Abs(c.G - backColor.G) + Math.Abs(c.B - backColor.B);
-            if (diff < 60)
+            if (diff < MaxColorDifference)
             {
-                SelectionBackColor = Color.FromArgb(byte.MaxValue - c.R, byte.MaxValue - c.G, byte.MaxValue - c.B, byte.MaxValue - c.R);
+                SelectionBackColor = Color.FromArgb(
+                    byte.MaxValue - c.R, 
+                    byte.MaxValue - c.G, 
+                    byte.MaxValue - c.B, 
+                    byte.MaxValue - c.R);
             }
         }
-
-        private const int WM_PAINT = 0x0F;
-        private const int WM_LBUTTONDBLCLK = 0x0203;
 
         protected override void WndProc(ref Message m)
         {
@@ -572,7 +671,7 @@ namespace Nikse.SubtitleEdit.Controls
 
         public void CheckForLanguageChange(Subtitle subtitle)
         {
-            var detectedLanguage = LanguageAutoDetect.AutoDetectGoogleLanguage(subtitle, 100);
+            var detectedLanguage = LanguageAutoDetect.AutoDetectGoogleLanguage(subtitle, SmallAutoDetectSampleSize);
             if (CurrentLanguage != detectedLanguage)
             {
                 DisposeHunspellAndDictionaries();
@@ -595,13 +694,14 @@ namespace Nikse.SubtitleEdit.Controls
 
         public void InitializeLiveSpellCheck(Subtitle subtitle, int lineNumber)
         {
-            if (lineNumber < 0 || !(_spellCheckWordLists is null) || !(_hunspell is null))
+            if (lineNumber < 0 || _spellCheckWordLists is not null || _hunspell is not null)
             {
                 return;
             }
 
-            var detectedLanguage = LanguageAutoDetect.AutoDetectGoogleLanguage(subtitle, 300);
+            var detectedLanguage = LanguageAutoDetect.AutoDetectGoogleLanguage(subtitle, AutoDetectSampleSize);
             IsDictionaryDownloaded = false;
+            
             if (IsDictionaryAvailable(detectedLanguage))
             {
                 var languageName = LanguageAutoDetect.AutoDetectLanguageName(string.Empty, subtitle);
@@ -623,16 +723,24 @@ namespace Nikse.SubtitleEdit.Controls
 
         private void LoadDictionaries(string languageName)
         {
+            if (string.IsNullOrWhiteSpace(languageName))
+                throw new ArgumentException("Language name cannot be null or empty", nameof(languageName));
+
             var dictionaryFolder = Utilities.DictionaryFolder;
             var dictionary = Utilities.DictionaryFolder + languageName;
+            
             _spellCheckWordLists = new SpellCheckWordLists(dictionaryFolder, languageName, this);
             _skipAllList = new List<string>();
             _skipOnceList = new HashSet<string>();
+            
             LoadHunspell(dictionary);
         }
 
         private void LoadHunspell(string dictionary)
         {
+            if (string.IsNullOrWhiteSpace(dictionary))
+                return;
+
             _currentDictionary = dictionary;
             _hunspell?.Dispose();
             _hunspell = null;
@@ -685,169 +793,241 @@ namespace Nikse.SubtitleEdit.Controls
         {
             _wrongWords = new List<SpellCheckWord>();
 
+            var minLength = Configuration.Settings.Tools.CheckOneLetterWords ? MinWordLengthSingleChar : MinWordLength;
+
             for (var i = 0; i < _words.Count; i++)
             {
                 var currentWord = _words[i];
-                var currentWordText = _words[i].Text;
-                var minLength = 2;
-                if (Configuration.Settings.Tools.CheckOneLetterWords)
-                {
-                    minLength = 1;
-                }
-
-                var key = CurrentLineIndex + "-" + currentWord.Text + "-" + currentWord.Index;
-                if (DoSpell(currentWordText) || Utilities.IsNumber(currentWordText) || _skipAllList.Contains(currentWordText)
-                    || _skipOnceList.Contains(key) || _spellCheckWordLists.HasUserWord(currentWordText) || _spellCheckWordLists.HasName(currentWordText)
-                    || currentWordText.Length < minLength || currentWordText == "&")
+                var currentWordText = currentWord.Text;
+                
+                var key = $"{CurrentLineIndex}-{currentWordText}-{currentWord.Index}";
+                
+                if (ShouldSkipWord(currentWordText, key, minLength))
                 {
                     continue;
                 }
 
-                string prefix = string.Empty;
-                string postfix = string.Empty;
-                if (currentWordText.RemoveControlCharacters().Trim().Length >= minLength)
-                {
-                    if (currentWordText.Length > 0)
-                    {
-                        const string trimChars = "'`*#\u200E\u200F\u202A\u202B\u202C\u202D\u202E\u200B\uFEFF";
-                        var charHit = true;
-                        while (charHit)
-                        {
-                            charHit = false;
-                            foreach (var c in trimChars)
-                            {
-                                if (currentWordText.StartsWith(c))
-                                {
-                                    prefix += c;
-                                    currentWordText = currentWordText.Substring(1);
-                                    charHit = true;
-                                }
-                                if (currentWordText.EndsWith(c))
-                                {
-                                    postfix = c + postfix;
-                                    currentWordText = currentWordText.Remove(currentWordText.Length - 1);
-                                    charHit = true;
-                                }
-                            }
-                        }
-                    }
-                }
+                var (prefix, postfix, trimmedWord) = TrimWordCharacters(currentWordText, minLength);
+                currentWordText = trimmedWord;
 
-                if (prefix == "'" && currentWordText.Length >= 1 && (DoSpell(prefix + currentWordText) || _spellCheckWordLists.HasUserWord(prefix + currentWordText)))
+                if (ShouldSkipPrefixedWord(prefix, currentWordText))
                 {
                     continue;
                 }
 
-                if (currentWordText.Length > 1)
+                if (ShouldSkipProcessedWord(currentWordText, i))
                 {
-                    if ("`'".Contains(currentWordText[currentWordText.Length - 1]) && DoSpell(currentWordText.TrimEnd('\'').TrimEnd('`')))
-                    {
-                        continue;
-                    }
-
-                    if (currentWordText.EndsWith("'s", StringComparison.Ordinal) && currentWordText.Length > 4
-                                                                                 && DoSpell(currentWordText.TrimEnd('s').TrimEnd('\'')))
-                    {
-                        continue;
-                    }
-
-                    if (currentWordText.EndsWith('\'') && DoSpell(currentWordText.TrimEnd('\'')))
-                    {
-                        continue;
-                    }
-
-                    var removeUnicode = currentWordText.Replace("\u200b", string.Empty); // zero width space
-                    removeUnicode = removeUnicode.Replace("\u2060", string.Empty); // word joiner
-                    removeUnicode = removeUnicode.Replace("\ufeff", string.Empty); // zero width no-break space
-                    if (DoSpell(removeUnicode))
-                    {
-                        continue;
-                    }
-
-                    if (i > 0 && i < _words.Count && _words.ElementAtOrDefault(i + 1) != null &&
-                        string.Equals(_words[i - 1].Text, "www", StringComparison.InvariantCultureIgnoreCase) &&
-                        (string.Equals(_words[i + 1].Text, "com", StringComparison.InvariantCultureIgnoreCase) ||
-                         string.Equals(_words[i + 1].Text, "org", StringComparison.InvariantCultureIgnoreCase) ||
-                         string.Equals(_words[i + 1].Text, "net", StringComparison.InvariantCultureIgnoreCase)) &&
-                        Text.IndexOf(_words[i - 1].Text + "." + currentWordText + "." +
-                                     _words[i + 1].Text, StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        continue; // do not spell check urls
-                    }
-
-                    if (CurrentLanguage == "ar")
-                    {
-                        var trimmed = currentWordText.Trim('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ',', '،');
-                        if (trimmed != currentWordText)
-                        {
-                            if (_spellCheckWordLists.HasName(trimmed) || _skipAllList.Contains(trimmed.ToUpperInvariant())
-                                                                      || _spellCheckWordLists.HasUserWord(trimmed) || DoSpell(trimmed))
-                            {
-                                continue;
-                            }
-                        }
-                    }
-
-                    // check if dash concatenated word with previous or next word is in spell check dictionary
-                    if (i > 0 && (Text[currentWord.Index - 1] == '-' || Text[currentWord.Index - 1] == '‑'))
-                    {
-                        var wordWithDash = _words[i - 1].Text + "-" + currentWordText;
-                        if (DoSpell(wordWithDash))
-                        {
-                            continue;
-                        }
-
-                        wordWithDash = _words[i - 1].Text + "‑" + currentWordText; // non break hyphen
-                        if (DoSpell(wordWithDash) || _spellCheckWordLists.HasUserWord(wordWithDash)
-                                                  || _spellCheckWordLists.HasUserWord(wordWithDash.Replace("‑", "-")) || _spellCheckWordLists.HasUserWord("-" + currentWordText))
-                        {
-                            continue;
-                        }
-
-                    }
-
-                    if (i < _words.Count - 1 && _words[i + 1].Index - 1 < Text.Length &&
-                        (Text[_words[i + 1].Index - 1] == '-' || Text[_words[i + 1].Index - 1] == '‑'))
-                    {
-                        var wordWithDash = currentWordText + "-" + _words[i + 1].Text;
-                        if (DoSpell(wordWithDash))
-                        {
-                            continue;
-                        }
-
-                        wordWithDash = currentWordText + "‑" + _words[i + 1].Text; // non break hyphen
-                        if (DoSpell(wordWithDash) || _spellCheckWordLists.HasUserWord(wordWithDash) || _spellCheckWordLists.HasUserWord(wordWithDash.Replace("‑", "-")))
-                        {
-                            continue;
-                        }
-                    }
-                }
-                else
-                {
-                    if (currentWordText == "'")
-                    {
-                        continue;
-                    }
-
-                    if (CurrentLanguage == "en" && (currentWordText.Equals("a", StringComparison.OrdinalIgnoreCase) || currentWordText == "I"))
-                    {
-                        continue;
-                    }
-
-                    if (CurrentLanguage == "da" && currentWordText.Equals("i", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
+                    continue;
                 }
 
-                if (Configuration.Settings.Tools.SpellCheckEnglishAllowInQuoteAsIng && CurrentLanguage == "en"
-                                                                                    && _words[i].Text.EndsWith("in'", StringComparison.OrdinalIgnoreCase) && DoSpell(currentWordText.TrimEnd('\'') + "g"))
+                if (ShouldSkipDashConcatenatedWord(currentWordText, i))
+                {
+                    continue;
+                }
+
+                if (ShouldSkipSingleCharacterWord(currentWordText))
+                {
+                    continue;
+                }
+
+                if (ShouldSkipEnglishContractions(currentWordText))
                 {
                     continue;
                 }
 
                 _wrongWords.Add(currentWord);
             }
+        }
+
+        private bool ShouldSkipWord(string word, string key, int minLength)
+        {
+            return DoSpell(word) || 
+                   Utilities.IsNumber(word) || 
+                   _skipAllList.Contains(word) ||
+                   _skipOnceList.Contains(key) || 
+                   _spellCheckWordLists.HasUserWord(word) || 
+                   _spellCheckWordLists.HasName(word) ||
+                   word.Length < minLength || 
+                   word == "&";
+        }
+
+        private (string prefix, string postfix, string word) TrimWordCharacters(string word, int minLength)
+        {
+            string prefix = string.Empty;
+            string postfix = string.Empty;
+            
+            if (word.RemoveControlCharacters().Trim().Length < minLength || word.Length == 0)
+            {
+                return (prefix, postfix, word);
+            }
+
+            var charHit = true;
+            while (charHit && word.Length > 0)
+            {
+                charHit = false;
+                foreach (var c in TrimChars)
+                {
+                    if (word.StartsWith(c))
+                    {
+                        prefix += c;
+                        word = word[1..];
+                        charHit = true;
+                    }
+                    if (word.EndsWith(c))
+                    {
+                        postfix = c + postfix;
+                        word = word[..^1];
+                        charHit = true;
+                    }
+                }
+            }
+
+            return (prefix, postfix, word);
+        }
+
+        private bool ShouldSkipPrefixedWord(string prefix, string word)
+        {
+            return prefix == "'" && word.Length >= 1 && 
+                   (DoSpell(prefix + word) || _spellCheckWordLists.HasUserWord(prefix + word));
+        }
+
+        private bool ShouldSkipProcessedWord(string word, int index)
+        {
+            if (word.Length <= 1) return false;
+
+            // Check various word patterns
+            if ("`'".Contains(word[^1]) && DoSpell(word.TrimEnd('\'', '`')))
+            {
+                return true;
+            }
+
+            if (word.EndsWith("'s", StringComparison.Ordinal) && word.Length > 4 &&
+                DoSpell(word.TrimEnd('s').TrimEnd('\'')))
+            {
+                return true;
+            }
+
+            if (word.EndsWith('\'') && DoSpell(word.TrimEnd('\'')))
+            {
+                return true;
+            }
+
+            // Remove Unicode spaces
+            var cleanWord = RemoveUnicodeSpaces(word);
+            if (cleanWord != word && DoSpell(cleanWord))
+            {
+                return true;
+            }
+
+            // Check URL patterns
+            if (IsPartOfUrl(index))
+            {
+                return true;
+            }
+
+            // Arabic number trimming
+            if (CurrentLanguage == "ar")
+            {
+                var trimmed = word.Trim(NumberAndPunctuationChars);
+                if (trimmed != word && ShouldSkipWord(trimmed, string.Empty, MinWordLength))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private string RemoveUnicodeSpaces(string word)
+        {
+            var result = word;
+            foreach (var unicodeSpace in UnicodeSpaces)
+            {
+                result = result.Replace(unicodeSpace.ToString(), string.Empty);
+            }
+            return result;
+        }
+
+        private bool IsPartOfUrl(int index)
+        {
+            if (index <= 0 || index >= _words.Count - 1) return false;
+
+            var prevWord = _words[index - 1];
+            var nextWord = _words[index + 1];
+            var currentWord = _words[index];
+
+            return string.Equals(prevWord.Text, "www", StringComparison.InvariantCultureIgnoreCase) &&
+                   CommonDomains.Any(domain => string.Equals(nextWord.Text, domain, StringComparison.InvariantCultureIgnoreCase)) &&
+                   Text.IndexOf($"{prevWord.Text}.{currentWord.Text}.{nextWord.Text}", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private bool ShouldSkipDashConcatenatedWord(string word, int index)
+        {
+            // Check dash concatenated words with previous word
+            if (index > 0 && IsCharAtPosition(word, index, HyphenChars, -1))
+            {
+                var wordWithDash = _words[index - 1].Text + "-" + word;
+                if (DoSpell(wordWithDash))
+                {
+                    return true;
+                }
+
+                wordWithDash = _words[index - 1].Text + "‑" + word; // non-break hyphen
+                if (DoSpell(wordWithDash) || _spellCheckWordLists.HasUserWord(wordWithDash) ||
+                    _spellCheckWordLists.HasUserWord(wordWithDash.Replace("‑", "-")) || 
+                    _spellCheckWordLists.HasUserWord("-" + word))
+                {
+                    return true;
+                }
+            }
+
+            // Check dash concatenated words with next word
+            if (index < _words.Count - 1 && IsCharAtPosition(word, index + 1, HyphenChars, -1))
+            {
+                var wordWithDash = word + "-" + _words[index + 1].Text;
+                if (DoSpell(wordWithDash))
+                {
+                    return true;
+                }
+
+                wordWithDash = word + "‑" + _words[index + 1].Text; // non-break hyphen
+                if (DoSpell(wordWithDash) || _spellCheckWordLists.HasUserWord(wordWithDash) || 
+                    _spellCheckWordLists.HasUserWord(wordWithDash.Replace("‑", "-")))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsCharAtPosition(string word, int wordIndex, char[] chars, int offset)
+        {
+            var nextWord = _words[wordIndex + (offset > 0 ? 1 : 0)];
+            var charIndex = nextWord.Index + offset;
+            return charIndex >= 0 && charIndex < Text.Length && chars.Contains(Text[charIndex]);
+        }
+
+        private bool ShouldSkipSingleCharacterWord(string word)
+        {
+            if (word.Length != 1) return false;
+
+            if (word == "'") return true;
+
+            return CurrentLanguage switch
+            {
+                "en" => word.Equals("a", StringComparison.OrdinalIgnoreCase) || word == "I",
+                "da" => word.Equals("i", StringComparison.OrdinalIgnoreCase),
+                _ => false
+            };
+        }
+
+        private bool ShouldSkipEnglishContractions(string word)
+        {
+            return Configuration.Settings.Tools.SpellCheckEnglishAllowInQuoteAsIng && 
+                   CurrentLanguage == "en" &&
+                   word.EndsWith("in'", StringComparison.OrdinalIgnoreCase) && 
+                   DoSpell(word.TrimEnd('\'') + "g");
         }
 
         public bool DoSpell(string word)
@@ -910,9 +1090,10 @@ namespace Nikse.SubtitleEdit.Controls
         private List<string> DoSuggest(string word)
         {
             var parameter = new SuggestionParameter(word, _hunspell);
-            var suggestThread = new System.Threading.Thread(DoWork);
+            var suggestThread = new Thread(DoWork);
             suggestThread.Start(parameter);
-            suggestThread.Join(3000); // wait max 3 seconds
+            suggestThread.Join(SuggestionTimeoutMs); // wait max 3 seconds
+            
             if (!parameter.Success)
             {
                 LoadHunspell(_currentDictionary);

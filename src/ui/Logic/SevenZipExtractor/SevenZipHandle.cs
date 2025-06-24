@@ -4,65 +4,57 @@ using System.Runtime.InteropServices;
 
 namespace SevenZipExtractor
 {
-    internal class SevenZipHandle : IDisposable
+    internal sealed class SevenZipHandle : IDisposable
     {
-        private SafeLibraryHandle sevenZipSafeHandle;
+        private SafeLibraryHandle _sevenZipSafeHandle;
+        private bool _disposed;
 
         public SevenZipHandle(string sevenZipLibPath)
         {
-            this.sevenZipSafeHandle = Kernel32Dll.LoadLibrary(sevenZipLibPath);
+            if (string.IsNullOrWhiteSpace(sevenZipLibPath))
+                throw new ArgumentException("Library path cannot be null or empty", nameof(sevenZipLibPath));
 
-            if (this.sevenZipSafeHandle.IsInvalid)
+            _sevenZipSafeHandle = Kernel32Dll.LoadLibrary(sevenZipLibPath);
+
+            if (_sevenZipSafeHandle.IsInvalid)
             {
-                throw new Win32Exception();
+                throw new Win32Exception($"Failed to load 7-Zip library: {sevenZipLibPath}");
             }
 
-            IntPtr functionPtr = Kernel32Dll.GetProcAddress(this.sevenZipSafeHandle, "GetHandlerProperty");
-            
-            // Not valid dll
+            // Validate the library by checking for required function
+            var functionPtr = Kernel32Dll.GetProcAddress(_sevenZipSafeHandle, "GetHandlerProperty");
             if (functionPtr == IntPtr.Zero)
             {
-                this.sevenZipSafeHandle.Close();
-                throw new ArgumentException();
+                _sevenZipSafeHandle.Close();
+                throw new ArgumentException($"Invalid 7-Zip library - missing required functions: {sevenZipLibPath}");
             }
-        }
-
-        ~SevenZipHandle()
-        {
-            this.Dispose(false);
-        }
-
-        protected void Dispose(bool disposing)
-        {
-            if ((this.sevenZipSafeHandle != null) && !this.sevenZipSafeHandle.IsClosed)
-            {
-                this.sevenZipSafeHandle.Close();
-            }
-
-            this.sevenZipSafeHandle = null;
-        }
-
-        public void Dispose()
-        {
-            this.Dispose(true);
-            GC.SuppressFinalize(this);
         }
 
         public IInArchive CreateInArchive(Guid classId)
         {
-            if (this.sevenZipSafeHandle == null)
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(SevenZipHandle));
+
+            var procAddress = Kernel32Dll.GetProcAddress(_sevenZipSafeHandle, "CreateObject");
+            if (procAddress == IntPtr.Zero)
+                throw new InvalidOperationException("CreateObject function not found in 7-Zip library");
+
+            var createObject = Marshal.GetDelegateForFunctionPointer<CreateObjectDelegate>(procAddress);
+            var interfaceId = typeof(IInArchive).GUID;
+            
+            createObject(ref classId, ref interfaceId, out var result);
+            
+            return result as IInArchive ?? throw new InvalidOperationException("Failed to create IInArchive instance");
+        }
+
+        public void Dispose()
+        {
+            if (!_disposed)
             {
-                throw new ObjectDisposedException("SevenZipHandle");
+                _sevenZipSafeHandle?.Close();
+                _sevenZipSafeHandle = null;
+                _disposed = true;
             }
-
-            IntPtr procAddress = Kernel32Dll.GetProcAddress(this.sevenZipSafeHandle, "CreateObject");
-            CreateObjectDelegate createObject = (CreateObjectDelegate) Marshal.GetDelegateForFunctionPointer(procAddress, typeof (CreateObjectDelegate));
-
-            object result;
-            Guid interfaceId = typeof (IInArchive).GUID;
-            createObject(ref classId, ref interfaceId, out result);
-
-            return result as IInArchive;
         }
     }
 }

@@ -3,7 +3,8 @@ using System.Runtime.Serialization;
 
 namespace SevenZipExtractor
 {
-    public class SevenZipException : Exception
+    [Serializable]
+    public sealed class SevenZipException : Exception
     {
         public SevenZipException()
         {
@@ -17,7 +18,7 @@ namespace SevenZipExtractor
         {
         }
 
-        protected SevenZipException(SerializationInfo info, StreamingContext context) : base(info, context)
+        private SevenZipException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }

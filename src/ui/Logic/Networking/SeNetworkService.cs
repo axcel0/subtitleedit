@@ -8,83 +8,102 @@ using System.Threading.Tasks;
 
 namespace Nikse.SubtitleEdit.Logic.Networking
 {
-    public class SeNetworkService
+    public class SeNetworkService : IDisposable
     {
-        private static HttpClient _httpClient;
-        public string BaseUrl { get; private set; }
+        private static readonly Lazy<HttpClient> _httpClient = new(() => CreateDefaultHttpClient());
+        private static readonly JsonSerializerSettings _jsonSettings = new()
+        {
+            MaxDepth = 20,
+            NullValueHandling = NullValueHandling.Ignore
+        };
+
+        public string BaseUrl { get; }
 
         public SeNetworkService(string baseUrl)
         {
-            if (string.IsNullOrEmpty(baseUrl))
+            if (string.IsNullOrWhiteSpace(baseUrl))
             {
-                throw new ArgumentException("Url cannot be empty");
+                throw new ArgumentException("URL cannot be null or empty", nameof(baseUrl));
+            }
+
+            if (!Uri.IsWellFormedUriString(baseUrl, UriKind.Absolute))
+            {
+                throw new ArgumentException($"'{baseUrl}' is not a valid URL.", nameof(baseUrl));
             }
 
             BaseUrl = baseUrl.Trim().TrimEnd('/') + "/";
-            _httpClient = CreateDefaultHttpClient(BaseUrl);
+            _httpClient.Value.BaseAddress = new Uri(BaseUrl);
         }
 
-        private static HttpClient CreateDefaultHttpClient(string baseUrl)
+        private static HttpClient CreateDefaultHttpClient()
         {
-            if (!Uri.IsWellFormedUriString(baseUrl, UriKind.Absolute))
-            {
-                throw new ArgumentException($"{baseUrl} is not a valid base URL.");
-            }
-
-            var client = new HttpClient { BaseAddress = new Uri(baseUrl) };
+            var client = new HttpClient();
             client.DefaultRequestHeaders.Accept.Clear();
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.Timeout = TimeSpan.FromSeconds(30);
             return client;
+        }
+
+        public async Task<T> PostAsync<T>(string path, object content = null)
+        {
+            var response = await SendRequestAsync(HttpMethod.Post, path, content);
+            return await ReadResponseAsync<T>(response);
         }
 
         public T Post<T>(string path, object content = null)
         {
-            var response = SendRequest(HttpMethod.Post, path, content);
-            return ReadResponse<T>(response);
+            return PostAsync<T>(path, content).GetAwaiter().GetResult();
         }
 
-        private HttpResponseMessage SendRequest(HttpMethod method, string uri, object content = null)
+        public async Task<HttpResponseMessage> SendRequestAsync(HttpMethod method, string uri, object content = null)
         {
-            return SendRequestAsync(method, uri, content).Result;
-        }
-
-        public Task<HttpResponseMessage> SendRequestAsync(HttpMethod method, string uri, object content = null)
-        {
-            var request = new HttpRequestMessage(method, uri);
+            using var request = new HttpRequestMessage(method, uri);
 
             if (content != null)
             {
-                var json = JsonConvert.SerializeObject(content);
+                var json = JsonConvert.SerializeObject(content, _jsonSettings);
                 request.Content = new StringContent(json, Encoding.UTF8, "application/json");
             }
 
-            return _httpClient.SendAsync(request);
+            return await _httpClient.Value.SendAsync(request);
         }
 
-        private static T ReadResponse<T>(HttpResponseMessage response)
+        private static async Task<T> ReadResponseAsync<T>(HttpResponseMessage response)
         {
-            var settings = new JsonSerializerSettings
+            response.EnsureSuccessStatusCode();
+            var jsonResponse = await response.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<T>(jsonResponse, _jsonSettings);
+        }
+
+        public readonly struct SeSequence
+        {
+            public int Index { get; }
+            public int StartMilliseconds { get; }
+            public int EndMilliseconds { get; }
+            public string Text { get; }
+
+            public SeSequence(int index, int startMilliseconds, int endMilliseconds, string text)
             {
-                MaxDepth = 20
-            };
-            var jsonResponse = response.Content.ReadAsStringAsync().Result;
-            return JsonConvert.DeserializeObject<T>(jsonResponse, settings);
-        }
-
-        public class SeSequence
-        {
-            public int Index { get; set; }
-            public int StartMilliseconds { get; set; }
-            public int EndMilliseconds { get; set; }
-            public string Text { get; set; }
+                Index = index;
+                StartMilliseconds = startMilliseconds;
+                EndMilliseconds = endMilliseconds;
+                Text = text ?? string.Empty;
+            }
         }
 
         [Serializable]
-        public class SeUser
+        public readonly struct SeUser
         {
-            public string UserName { get; set; }
-            public string Ip { get; set; }
-            public DateTime LastActivity { get; set; }
+            public string UserName { get; }
+            public string Ip { get; }
+            public DateTime LastActivity { get; }
+
+            public SeUser(string userName, string ip, DateTime lastActivity)
+            {
+                UserName = userName ?? string.Empty;
+                Ip = ip ?? string.Empty;
+                LastActivity = lastActivity;
+            }
         }
 
         public class SeUpdate
@@ -139,7 +158,7 @@ namespace Nikse.SubtitleEdit.Logic.Networking
             {
                 for (int i = 0; i < Subtitle.Count; i++)
                 {
-                    Subtitle[0].Index = i;
+                    Subtitle[i].Index = i;
                 }
             }
         }
@@ -294,6 +313,20 @@ namespace Nikse.SubtitleEdit.Logic.Networking
         public GetOriginalSubtitleResponse GetOriginalSubtitle(GetOriginalSubtitleRequest request)
         {
             return Post<GetOriginalSubtitleResponse>("GetOriginalSubtitle", request);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing && _httpClient.IsValueCreated)
+            {
+                _httpClient.Value?.Dispose();
+            }
         }
     }
 }

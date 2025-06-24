@@ -2,53 +2,64 @@
 
 namespace SevenZipExtractor
 {
-    internal class ArchiveStreamCallback : IArchiveExtractCallback, ICryptoGetTextPassword
+    internal sealed class ArchiveStreamCallback : IArchiveExtractCallback, ICryptoGetTextPassword
     {
-        private readonly uint fileNumber;
-        private readonly Stream stream;
+        private readonly uint _fileNumber;
+        private readonly Stream _stream;
 
         public string Password { get; }
 
         public ArchiveStreamCallback(uint fileNumber, Stream stream, string password = null)
         {
-            this.fileNumber = fileNumber;
-            this.stream = stream;
-            Password = password ?? "";
+            _fileNumber = fileNumber;
+            _stream = stream ?? throw new System.ArgumentNullException(nameof(stream));
+            Password = password ?? string.Empty;
         }
 
         public void SetTotal(ulong total)
         {
+            // Implementation not needed for stream extraction
         }
 
         public void SetCompleted(ref ulong completeValue)
         {
+            // Implementation not needed for stream extraction
         }
 
         public int CryptoGetTextPassword(out string password)
         {
-            password = this.Password;
+            password = Password;
             return 0;
         }
 
         public int GetStream(uint index, out ISequentialOutStream outStream, AskMode askExtractMode)
         {
-            if ((index != this.fileNumber) || (askExtractMode != AskMode.kExtract))
+            outStream = null;
+
+            if (index != _fileNumber || askExtractMode != AskMode.kExtract)
             {
-                outStream = null;
                 return 0;
             }
 
-            outStream = new OutStreamWrapper(this.stream);
-
-            return 0;
+            try
+            {
+                outStream = new OutStreamWrapper(_stream);
+                return 0;
+            }
+            catch
+            {
+                return -1; // Error code
+            }
         }
 
         public void PrepareOperation(AskMode askExtractMode)
         {
+            // Implementation not needed for stream extraction
         }
 
         public void SetOperationResult(OperationResult resultEOperationResult)
         {
+            // Stream disposal is handled by the caller
         }
     }
 }
