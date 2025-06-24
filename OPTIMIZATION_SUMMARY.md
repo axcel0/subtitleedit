@@ -342,3 +342,212 @@ These optimizations provide a solid foundation for future development and ensure
 **Optimization Period**: Comprehensive modernization effort  
 **Status**: ✅ Complete - All files compile without errors  
 **Impact**: Major improvement in code quality, performance, and maintainability
+
+# Git Fork Management Guide
+
+## 🔄 How to Keep Your Fork Updated with Upstream
+
+When you fork a repository, you'll want to keep your fork synchronized with the original repository (upstream). Here's how to do it:
+
+### 1. Check Current Remote Configuration
+
+First, check what remotes you currently have:
+
+```bash
+git remote -v
+```
+
+You should see something like:
+```
+origin  https://github.com/YOUR_USERNAME/subtitleedit.git (fetch)
+origin  https://github.com/YOUR_USERNAME/subtitleedit.git (push)
+```
+
+### 2. Add Upstream Remote
+
+Add the original repository as an upstream remote:
+
+```bash
+git remote add upstream https://github.com/SubtitleEdit/subtitleedit.git
+```
+
+Verify the new upstream remote:
+```bash
+git remote -v
+```
+
+Now you should see:
+```
+origin    https://github.com/YOUR_USERNAME/subtitleedit.git (fetch)
+origin    https://github.com/YOUR_USERNAME/subtitleedit.git (push)
+upstream  https://github.com/SubtitleEdit/subtitleedit.git (fetch)
+upstream  https://github.com/SubtitleEdit/subtitleedit.git (push)
+```
+
+### 3. Fetch Latest Changes from Upstream
+
+```bash
+git fetch upstream
+```
+
+### 4. Checkout Your Main Branch
+
+```bash
+git checkout main
+# or if the default branch is master:
+# git checkout master
+```
+
+### 5. Merge Upstream Changes
+
+```bash
+git merge upstream/main
+# or if the default branch is master:
+# git merge upstream/master
+```
+
+### 6. Push Updated Changes to Your Fork
+
+```bash
+git push origin main
+# or if the default branch is master:
+# git push origin master
+```
+
+## 🚀 Complete Workflow Script
+
+Here's a complete script you can save and run periodically:
+
+```bash
+#!/bin/bash
+# update-fork.sh
+
+echo "🔄 Updating fork with upstream changes..."
+
+# Fetch latest changes from upstream
+echo "📥 Fetching upstream changes..."
+git fetch upstream
+
+# Switch to main branch
+echo "🔀 Switching to main branch..."
+git checkout main
+
+# Merge upstream changes
+echo "🔀 Merging upstream changes..."
+git merge upstream/main
+
+# Push to your fork
+echo "📤 Pushing to your fork..."
+git push origin main
+
+echo "✅ Fork updated successfully!"
+```
+
+Make it executable:
+```bash
+chmod +x update-fork.sh
+./update-fork.sh
+```
+
+## ⚠️ Handling Conflicts
+
+If you have made changes to your fork that conflict with upstream:
+
+### Option 1: Rebase (Recommended for clean history)
+```bash
+git fetch upstream
+git checkout main
+git rebase upstream/main
+# Resolve conflicts if any
+git push origin main --force-with-lease
+```
+
+### Option 2: Merge (Preserves your commit history)
+```bash
+git fetch upstream
+git checkout main
+git merge upstream/main
+# Resolve conflicts if any
+git push origin main
+```
+
+## 🔧 Working with Feature Branches
+
+When working on features, create separate branches:
+
+```bash
+# Create and switch to a new feature branch
+git checkout -b feature/my-optimization
+
+# Make your changes and commit
+git add .
+git commit -m "Add new optimization features"
+
+# Push feature branch to your fork
+git push origin feature/my-optimization
+
+# When ready, create a Pull Request from your fork to upstream
+```
+
+## 📋 Best Practices
+
+1. **Always sync before starting new work**:
+   ```bash
+   git fetch upstream
+   git checkout main
+   git merge upstream/main
+   git push origin main
+   ```
+
+2. **Work on feature branches, not main**:
+   ```bash
+   git checkout -b feature/new-feature
+   ```
+
+3. **Keep your fork's main branch clean**:
+   - Don't commit directly to main
+   - Use main only for syncing with upstream
+
+4. **Regular updates**:
+   - Sync with upstream weekly or before starting new features
+   - This prevents large merge conflicts
+
+## 🛠️ Troubleshooting
+
+### If you get "fatal: 'upstream' does not appear to be a git repository"
+```bash
+git remote add upstream https://github.com/SubtitleEdit/subtitleedit.git
+```
+
+### If you get merge conflicts
+```bash
+# Edit conflicted files manually
+git add .
+git commit -m "Resolve merge conflicts"
+git push origin main
+```
+
+### If you want to reset your fork to match upstream exactly
+```bash
+git fetch upstream
+git checkout main
+git reset --hard upstream/main
+git push origin main --force
+```
+
+⚠️ **Warning**: The last command will overwrite your changes!
+
+## 🎯 Summary Commands
+
+Quick reference for updating your fork:
+
+```bash
+# One-time setup
+git remote add upstream https://github.com/SubtitleEdit/subtitleedit.git
+
+# Regular update routine
+git fetch upstream
+git checkout main
+git merge upstream/main
+git push origin main
+```
